@@ -23,9 +23,6 @@
     </section>
 
     <section class="panel filters" aria-label="Comparable cohort filters">
-      <label>Phase
-        <select id="phase"></select>
-      </label>
       <label>Dataset version
         <select id="dataset"></select>
       </label>
@@ -53,7 +50,7 @@
         <span>Upper-left is better: higher quality, less time</span>
       </div>
       <div class="canvas-wrap">
-        <canvas id="pareto" role="img" aria-label="Quality versus total task time by model profile"></canvas>
+        <canvas id="pareto" role="img" aria-label="Quality versus total task time by model and agent setup"></canvas>
         <div class="tooltip" id="pareto-tip"></div>
       </div>
       <div class="legend" id="pareto-legend"></div>
@@ -61,15 +58,15 @@
 
     <section class="panel section">
       <div class="section-head">
-        <h2>Model comparison</h2>
-        <span id="cohort-label">One phase and dataset version at a time</span>
+        <h2>Model and agent comparison</h2>
+        <span id="cohort-label">One outcome dataset version at a time</span>
       </div>
       <div class="table-scroll">
         <table>
           <thead>
             <tr>
               <th>Rank</th>
-              <th>Profile</th>
+              <th>Setup</th>
               <th>Model</th>
               <th>Type</th>
               <th>Provider / runtime</th>
@@ -98,7 +95,7 @@
           <span>Mean and approximate 95% interval</span>
         </div>
         <div class="canvas-wrap">
-          <canvas id="comparison" role="img" aria-label="Selected metric comparison with uncertainty by model profile"></canvas>
+          <canvas id="comparison" role="img" aria-label="Selected metric comparison with uncertainty by model and agent setup"></canvas>
           <div class="tooltip" id="comparison-tip"></div>
         </div>
       </article>
@@ -118,7 +115,7 @@
     <section class="panel section">
       <div class="section-head">
         <h2>Case coverage</h2>
-        <span id="coverage-label">Profile × case sample counts</span>
+        <span id="coverage-label">Setup × case sample counts</span>
       </div>
       <div class="table-scroll">
         <table>
@@ -150,7 +147,7 @@
       <div class="table-scroll">
         <table>
           <thead>
-            <tr><th>Time</th><th>Profile</th><th>Case</th><th>Trial</th><th>Metric</th><th>Value</th><th>Run</th><th>Benchmark fingerprint</th></tr>
+            <tr><th>Time</th><th>Setup</th><th>Case</th><th>Trial</th><th>Metric</th><th>Value</th><th>Run</th><th>Benchmark fingerprint</th></tr>
           </thead>
           <tbody id="details"></tbody>
         </table>

@@ -13,7 +13,8 @@ build/
 logs/
 results/
 workspaces/
-repos/*
-!repos/README.md
+local-repos/*
+!local-repos/README.md
 .env.local
 configs/*.local.json
+.agent-resources/

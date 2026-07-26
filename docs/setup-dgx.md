@@ -109,8 +109,8 @@ Then run:
 
 ```bash
 pi-bench doctor \
-  --profile local-candidate \
-  --profiles configs/model-baselines.local.json \
+  --model-profile local-candidate \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local
 ```
 

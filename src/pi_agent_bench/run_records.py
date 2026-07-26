@@ -11,6 +11,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from .agent_profiles import AgentProfile, vanilla_agent_profile
 from .model_profiles import ModelProfile
 from .verification import finite_number, primary_score, quality_value
 from .versions import FRAMEWORK_VERSION, INSPECT_VERSION, PI_VERSION, SANDBOX_IMAGE
@@ -35,12 +36,14 @@ def export_inspect_logs(
             )
             continue
         profile = benchmark.get("profile")
+        agent_profile = benchmark.get("agent_profile")
         try:
             written.extend(
                 write_run_records(
                     [log],
                     results_dir,
                     profile,
+                    agent_profile=agent_profile,
                     campaign=str(benchmark.get("campaign", "default")),
                     cache_state=str(benchmark.get("cache_state", "unspecified")),
                 )
@@ -55,6 +58,7 @@ def write_run_records(
     results_dir: str | Path,
     profile: ModelProfile | dict[str, Any],
     *,
+    agent_profile: AgentProfile | dict[str, Any] | None = None,
     campaign: str = "default",
     cache_state: str = "unspecified",
 ) -> list[Path]:
@@ -62,6 +66,7 @@ def write_run_records(
     destination.mkdir(parents=True, exist_ok=True)
     repository = _repository_identity()
     profile_identity = _profile_identity(profile)
+    agent_identity = _agent_profile_identity(agent_profile)
     written: list[Path] = []
     for log in logs:
         log_status = str(getattr(log, "status", "success"))
@@ -70,6 +75,7 @@ def write_run_records(
                 destination,
                 log,
                 profile,
+                agent_profile=agent_identity,
                 reason=f"Inspect log status is {log_status}",
                 campaign=campaign,
                 cache_state=cache_state,
@@ -85,6 +91,7 @@ def write_run_records(
                     destination,
                     log,
                     profile,
+                    agent_profile=agent_identity,
                     sample=sample,
                     reason="Inspect sample has an execution error",
                     campaign=campaign,
@@ -102,6 +109,7 @@ def write_run_records(
                     destination,
                     log,
                     profile,
+                    agent_profile=agent_identity,
                     sample=sample,
                     reason="Inspect sample has no score",
                     campaign=campaign,
@@ -127,6 +135,7 @@ def write_run_records(
                     destination,
                     log,
                     profile,
+                    agent_profile=agent_identity,
                     sample=sample,
                     reason="Inspect primary score has no finite quality value",
                     campaign=campaign,
@@ -144,15 +153,15 @@ def write_run_records(
             )
             timing = _inspect_timing(sample)
             record = {
-                "schema_version": 1,
+                "schema_version": 3,
                 "run_id": log.eval.run_id,
                 "case_id": str(sample.id),
                 "dataset_version": log.eval.task_version,
-                "phase": sample.metadata.get("phase"),
                 "trial_number": sample.epoch,
                 "campaign": campaign,
                 "cache_state": cache_state,
                 "model_configuration": profile_identity,
+                "agent_configuration": agent_identity,
                 "inspect_model": str(log.eval.model),
                 "harness": {
                     "framework_version": FRAMEWORK_VERSION,
@@ -187,7 +196,6 @@ def write_run_records(
                         "required_components",
                         [],
                     ),
-                    "grader_model": score_metadata.get("grader_model"),
                 },
                 "inspect_scores": {
                     name: {
@@ -225,6 +233,7 @@ def _write_invalid_record(
     log: Any,
     profile: ModelProfile | dict[str, Any],
     *,
+    agent_profile: AgentProfile | dict[str, Any] | None = None,
     reason: str,
     campaign: str,
     cache_state: str,
@@ -234,19 +243,18 @@ def _write_invalid_record(
     invalid_dir.mkdir(parents=True, exist_ok=True)
     sample_id = str(sample.id) if sample is not None else "log"
     epoch = getattr(sample, "epoch", 0)
-    path = invalid_dir / (
-        f"{log.eval.run_id}__{sample_id}__trial-{epoch}.invalid.json"
-    )
+    path = invalid_dir / (f"{log.eval.run_id}__{sample_id}__trial-{epoch}.invalid.json")
     path.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 3,
                 "run_id": log.eval.run_id,
                 "case_id": sample_id if sample is not None else None,
                 "trial_number": epoch if sample is not None else None,
                 "campaign": campaign,
                 "cache_state": cache_state,
                 "model_configuration": _profile_identity(profile),
+                "agent_configuration": _agent_profile_identity(agent_profile),
                 "inspect_model": str(log.eval.model),
                 "validity": {
                     "valid": False,
@@ -279,11 +287,7 @@ def _score_success(value: Any, quality: float, threshold: Any) -> bool:
 
 
 def _score_components(value: Any, metadata_components: Any) -> dict[str, Any]:
-    components = (
-        dict(metadata_components)
-        if isinstance(metadata_components, dict)
-        else {}
-    )
+    components = dict(metadata_components) if isinstance(metadata_components, dict) else {}
     if isinstance(value, dict):
         for name, component in value.items():
             if name.startswith("component."):
@@ -340,6 +344,19 @@ def _profile_identity(profile: ModelProfile | dict[str, Any]) -> dict[str, Any]:
     required = {"profile", "kind", "model", "configuration"}
     if not isinstance(profile, dict) or not required.issubset(profile):
         raise ValueError("Inspect log has no complete benchmark profile identity")
+    return dict(profile)
+
+
+def _agent_profile_identity(
+    profile: AgentProfile | dict[str, Any] | None,
+) -> dict[str, Any]:
+    if profile is None:
+        return vanilla_agent_profile().public_identity()
+    if isinstance(profile, AgentProfile):
+        return profile.public_identity()
+    required = {"profile", "configuration", "configuration_fingerprint"}
+    if not isinstance(profile, dict) or not required.issubset(profile):
+        raise ValueError("Inspect log has no complete agent profile identity")
     return dict(profile)
 
 

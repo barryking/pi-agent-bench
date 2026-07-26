@@ -7,9 +7,9 @@ import subprocess
 from pathlib import Path
 
 
-def prepare_workspace(fixture: Path, diff: str, workspace: Path) -> None:
-    """Copy a fixture, reset it to its baseline, and apply an optional diff."""
-    shutil.copytree(fixture, workspace, symlinks=True)
+def prepare_workspace(starting_repository: Path, diff: str, workspace: Path) -> None:
+    """Copy a starting_repository, reset it to its baseline, and apply an optional diff."""
+    shutil.copytree(starting_repository, workspace, symlinks=True)
     if (workspace / ".git").exists():
         run_git(workspace, "reset", "--hard", "-q", "HEAD")
         run_git(workspace, "clean", "-ffdqx")

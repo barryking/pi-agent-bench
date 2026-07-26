@@ -150,7 +150,7 @@
       const profiles = unique(state.rawCohort.map(row => row.profile));
       const cases = unique(metricRows(state.rawCohort, "quality.score").map(row => row.case_id));
       $("coverage-head").innerHTML =
-        `<th>Profile</th>${cases.map(caseId => `<th>${escapeHtml(caseId)}</th>`).join("")}`;
+        `<th>Setup</th>${cases.map(caseId => `<th>${escapeHtml(caseId)}</th>`).join("")}`;
       $("coverage-body").innerHTML = profiles.map(profile => {
         const rows = metricRows(
           state.rawCohort.filter(row => row.profile === profile),
@@ -162,7 +162,7 @@
         }).join("")}</tr>`;
       }).join("");
       $("coverage-label").textContent = state.sameCoverage
-        ? "Identical case coverage across profiles"
+        ? "Identical case coverage across model-and-agent setups"
         : `${state.commonCases.length} common cases; enable “Common cases only” for a paired comparison`;
     }
 

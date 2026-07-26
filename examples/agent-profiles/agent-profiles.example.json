@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "profiles": {
+    "example-guidance": {
+      "description": "Vanilla Pi plus one owned AGENTS.md file.",
+      "trust_mode": "no-approve",
+      "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
+      "runtime_env": {},
+      "settings": {},
+      "context_files": [
+        {
+          "name": "example-guidance",
+          "path": "guidance/AGENTS.md"
+        }
+      ],
+      "system_prompt": null,
+      "append_system_prompts": [],
+      "skills": [],
+      "extensions": [],
+      "prompt_templates": [],
+      "mcp_servers": []
+    },
+    "example-plan-first": {
+      "description": "Vanilla Pi plus owned plan-first guidance.",
+      "trust_mode": "no-approve",
+      "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
+      "runtime_env": {},
+      "settings": {},
+      "context_files": [
+        {
+          "name": "plan-first",
+          "path": "plan-first/AGENTS.md"
+        }
+      ],
+      "system_prompt": null,
+      "append_system_prompts": [],
+      "skills": [],
+      "extensions": [],
+      "prompt_templates": [],
+      "mcp_servers": []
+    },
+    "example-skill": {
+      "description": "Vanilla Pi plus one owned test-first skill.",
+      "trust_mode": "no-approve",
+      "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
+      "runtime_env": {},
+      "settings": {},
+      "context_files": [],
+      "system_prompt": null,
+      "append_system_prompts": [],
+      "skills": [
+        {
+          "name": "test-first",
+          "path": "skills/test-first"
+        }
+      ],
+      "extensions": [],
+      "prompt_templates": [],
+      "mcp_servers": []
+    },
+    "example-extension": {
+      "description": "Vanilla Pi plus one owned repository information tool.",
+      "trust_mode": "no-approve",
+      "tools": ["read", "bash", "edit", "write", "grep", "find", "ls", "repository_info"],
+      "runtime_env": {},
+      "settings": {},
+      "context_files": [],
+      "system_prompt": null,
+      "append_system_prompts": [],
+      "skills": [],
+      "extensions": [
+        {
+          "name": "repository-info",
+          "path": "extensions/repository-info.ts"
+        }
+      ],
+      "prompt_templates": [],
+      "mcp_servers": []
+    },
+    "example-prompt-template": {
+      "description": "Vanilla Pi plus one owned slash-command prompt template.",
+      "trust_mode": "no-approve",
+      "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
+      "runtime_env": {},
+      "settings": {},
+      "context_files": [],
+      "system_prompt": null,
+      "append_system_prompts": [],
+      "skills": [],
+      "extensions": [],
+      "prompt_templates": [
+        {
+          "name": "benchmark-review",
+          "path": "prompts/benchmark-review.md"
+        }
+      ],
+      "mcp_servers": []
+    },
+    "example-mcp": {
+      "description": "Vanilla Pi plus an owned MCP client extension and stdio server.",
+      "trust_mode": "no-approve",
+      "tools": ["read", "bash", "edit", "write", "grep", "find", "ls", "example_catalog_lookup"],
+      "runtime_env": {},
+      "settings": {},
+      "context_files": [],
+      "system_prompt": null,
+      "append_system_prompts": [],
+      "skills": [],
+      "extensions": [
+        {
+          "name": "mcp-client",
+          "path": "extensions/mcp-client"
+        }
+      ],
+      "prompt_templates": [],
+      "mcp_servers": [
+        {
+          "name": "example-catalog",
+          "extension": "mcp-client",
+          "transport": "stdio",
+          "server": "example-catalog",
+          "tools": ["example_catalog_lookup"]
+        }
+      ]
+    },
+    "example-everything": {
+      "description": "All owned examples together for documentation and integration checks.",
+      "trust_mode": "no-approve",
+      "tools": ["read", "bash", "edit", "write", "grep", "find", "ls", "repository_info", "example_catalog_lookup"],
+      "runtime_env": {},
+      "settings": {},
+      "context_files": [
+        {
+          "name": "example-guidance",
+          "path": "guidance/AGENTS.md"
+        }
+      ],
+      "system_prompt": null,
+      "append_system_prompts": [],
+      "skills": [
+        {
+          "name": "test-first",
+          "path": "skills/test-first"
+        }
+      ],
+      "extensions": [
+        {
+          "name": "repository-info",
+          "path": "extensions/repository-info.ts"
+        },
+        {
+          "name": "mcp-client",
+          "path": "extensions/mcp-client"
+        }
+      ],
+      "prompt_templates": [
+        {
+          "name": "benchmark-review",
+          "path": "prompts/benchmark-review.md"
+        }
+      ],
+      "mcp_servers": [
+        {
+          "name": "example-catalog",
+          "extension": "mcp-client",
+          "transport": "stdio",
+          "server": "example-catalog",
+          "tools": ["example_catalog_lookup"]
+        }
+      ]
+    }
+  }
+}

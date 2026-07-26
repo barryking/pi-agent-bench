@@ -5,39 +5,19 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
-Phase = Literal["planning", "coding"]
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+from .repository import REPOSITORY_ROOT
+
 CASE_SCHEMA = json.loads(
     (REPOSITORY_ROOT / "evals" / "schemas" / "golden-case.schema.json").read_text(
         encoding="utf-8"
     )
 )
 CASE_VALIDATOR = Draft202012Validator(CASE_SCHEMA)
-
-
-@dataclass(frozen=True)
-class RubricCriterion:
-    id: str
-    description: str
-    weight: float = 1.0
-
-    @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> RubricCriterion:
-        criterion_id = _required_string(value, "id")
-        description = _required_string(value, "description")
-        weight = value.get("weight", 1.0)
-        if (
-            not isinstance(weight, (int, float))
-            or isinstance(weight, bool)
-            or weight <= 0
-        ):
-            raise ValueError(f"{criterion_id}: rubric weight must be positive")
-        return cls(id=criterion_id, description=description, weight=float(weight))
 
 
 @dataclass(frozen=True)
@@ -51,11 +31,7 @@ class Limits:
     def from_dict(cls, value: dict[str, Any]) -> Limits:
         context_tokens = _positive_int(value, "context_tokens")
         total_tokens = value.get("total_tokens", context_tokens)
-        if (
-            not isinstance(total_tokens, int)
-            or isinstance(total_tokens, bool)
-            or total_tokens <= 0
-        ):
+        if not isinstance(total_tokens, int) or isinstance(total_tokens, bool) or total_tokens <= 0:
             raise ValueError("total_tokens must be a positive integer")
         limits = cls(
             seconds=_positive_int(value, "seconds"),
@@ -68,24 +44,12 @@ class Limits:
 
 @dataclass(frozen=True)
 class Expected:
-    required_concepts: tuple[str, ...] = ()
-    forbidden_concepts: tuple[str, ...] = ()
     verifier_command: tuple[str, ...] = ()
-    rubric: tuple[RubricCriterion, ...] = ()
     success_threshold: float = 1.0
     required_components: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> Expected:
-        rubric_value = value.get("rubric", [])
-        if not isinstance(rubric_value, list) or not all(
-            isinstance(item, dict) for item in rubric_value
-        ):
-            raise ValueError("rubric must be a list of objects")
-        rubric = tuple(RubricCriterion.from_dict(item) for item in rubric_value)
-        rubric_ids = [criterion.id for criterion in rubric]
-        if len(rubric_ids) != len(set(rubric_ids)):
-            raise ValueError("rubric criterion ids must be unique")
         success_threshold = value.get("success_threshold", 1.0)
         if (
             not isinstance(success_threshold, (int, float))
@@ -94,10 +58,7 @@ class Expected:
         ):
             raise ValueError("success_threshold must be greater than 0 and at most 1")
         return cls(
-            required_concepts=_string_tuple(value.get("required_concepts", [])),
-            forbidden_concepts=_string_tuple(value.get("forbidden_concepts", [])),
             verifier_command=_string_tuple(value.get("verifier_command", [])),
-            rubric=rubric,
             success_threshold=float(success_threshold),
             required_components=_string_tuple(value.get("required_components", [])),
         )
@@ -106,34 +67,24 @@ class Expected:
 @dataclass(frozen=True)
 class GoldenCase:
     id: str
-    phase: Phase
     instruction: str
     limits: Limits
     expected: Expected
-    context_files: tuple[str, ...] = ()
     tags: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> GoldenCase:
         case_id = _required_string(value, "id")
-        phase = value.get("phase")
-        if phase not in {"planning", "coding"}:
-            raise ValueError(f"{case_id}: phase must be planning or coding")
-
         expected = Expected.from_dict(_required_dict(value, "expected"))
-        if phase == "planning" and not expected.required_concepts:
-            raise ValueError(f"{case_id}: planning cases need required_concepts")
-        if phase == "coding" and not expected.verifier_command:
-            raise ValueError(f"{case_id}: coding cases need verifier_command")
+        if not expected.verifier_command:
+            raise ValueError(f"{case_id}: outcome cases need verifier_command")
 
         return cls(
             id=case_id,
-            phase=phase,
             instruction=_required_string(value, "instruction"),
             limits=Limits.from_dict(_required_dict(value, "limits")),
             expected=expected,
-            context_files=_string_tuple(value.get("context_files", [])),
             tags=_string_tuple(value.get("tags", [])),
             metadata=_optional_dict(value.get("metadata", {}), "metadata"),
         )

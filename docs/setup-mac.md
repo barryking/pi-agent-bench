@@ -43,6 +43,9 @@ git clone https://github.com/barryking/pi-agent-bench.git
 cd pi-agent-bench
 ```
 
+Use Pi Agent Bench from this clone. Do not install only the Python package:
+the cases, verifiers, Docker files, and dashboard are also required.
+
 ## 3. Run the setup script
 
 ```bash
@@ -74,7 +77,8 @@ pi-bench versions
 The setup script creates:
 
 - `.env.local`;
-- `configs/model-baselines.local.json`.
+- `configs/model-baselines.local.json`; and
+- `configs/agent-profiles.local.json`.
 
 Put secret keys and private addresses in `.env.local`.
 
@@ -102,12 +106,17 @@ Record:
 
 Never put a secret key in the JSON file.
 
+The agent profile file starts with only `vanilla`. You can add exact Pi
+instructions, tools, skills, extensions, or MCP support later. Read
+[Agent profiles](agent-profiles.md).
+
 ## 5. Check one model
 
 ```bash
 pi-bench doctor \
-  --profile local-candidate \
-  --profiles configs/model-baselines.local.json \
+  --model-profile local-candidate \
+  --model-profiles-file configs/model-baselines.local.json \
+  --agent-profile vanilla \
   --env-file .env.local
 ```
 
@@ -119,10 +128,10 @@ Fix every message before running a benchmark.
 ## 6. Run a small test
 
 ```bash
-pi-bench run coding \
-  --dataset evals/starter/coding.jsonl \
-  --profile hosted-quality \
-  --profiles configs/model-baselines.local.json \
+pi-bench run \
+  --dataset evals/starter/cases.jsonl \
+  --model-profile hosted-quality \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --campaign first-check
 ```
@@ -163,7 +172,7 @@ Do not copy the login contents into this repository.
 
 Each trial gets a new temporary home folder.
 
-Pi runs with personal extras turned off:
+The default `vanilla` profile runs with personal extras turned off:
 
 ```text
 --no-session
@@ -177,6 +186,9 @@ Pi runs with personal extras turned off:
 
 This stops a personal skill or old session from changing the test.
 
+If you select another agent profile, only its named files are copied into this
+temporary home. Your normal Pi files still stay outside the container.
+
 ## Clean up
 
 Logs and results stay on the Mac. Git ignores them.
@@ -184,7 +196,7 @@ Logs and results stay on the Mac. Git ignores them.
 To remove only the reusable Docker image:
 
 ```bash
-docker image rm pi-agent-bench-sandbox:0.4.0
+docker image rm pi-agent-bench-sandbox:0.6.0
 ```
 
 Do this only when you mean to rebuild it.

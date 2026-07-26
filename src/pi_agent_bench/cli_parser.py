@@ -6,22 +6,46 @@ import argparse
 from pathlib import Path
 
 
-def _add_profile_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--profile", required=True)
+class _ExactArgumentParser(argparse.ArgumentParser):
+    """Reject shortened flags so similarly named profile options stay clear."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs.setdefault("allow_abbrev", False)
+        super().__init__(*args, **kwargs)
+
+
+def _add_model_and_agent_profile_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "--profiles",
+        "--model-profile",
+        required=True,
+        help="name of the model setup to use",
+    )
+    parser.add_argument(
+        "--model-profiles-file",
         type=Path,
         default=Path("configs/model-baselines.example.json"),
+        help="JSON file containing model profiles",
     )
     parser.add_argument(
         "--env-file",
         type=Path,
         help="optional ignored KEY=VALUE file, normally .env.local",
     )
+    parser.add_argument(
+        "--agent-profile",
+        default="vanilla",
+        help="exact Pi tools and resources to use (default: vanilla)",
+    )
+    parser.add_argument(
+        "--agent-profiles-file",
+        type=Path,
+        default=Path("configs/agent-profiles.json"),
+        help="JSON file containing agent profiles",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="pi-bench")
+    parser = _ExactArgumentParser(prog="pi-bench")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init = subparsers.add_parser(
@@ -32,9 +56,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     new_case = subparsers.add_parser(
         "new-case",
-        help="scaffold a planning or coding benchmark case",
+        help="scaffold one complete repository-outcome benchmark case",
     )
-    new_case.add_argument("phase", choices=["planning", "coding"])
     new_case.add_argument("--id", required=True)
     new_case.add_argument("--dataset", type=Path, required=True)
     new_case.add_argument("--dataset-version", default="draft-1")
@@ -42,39 +65,45 @@ def build_parser() -> argparse.ArgumentParser:
     validate = subparsers.add_parser("validate", help="validate a golden JSONL dataset")
     validate.add_argument("dataset", type=Path)
 
-    profiles = subparsers.add_parser("profiles", help="list public-safe model profiles")
-    profiles.add_argument(
-        "--profiles",
+    model_profiles = subparsers.add_parser(
+        "model-profiles",
+        help="list public-safe model profiles",
+    )
+    model_profiles.add_argument(
+        "--model-profiles-file",
         type=Path,
         default=Path("configs/model-baselines.example.json"),
+        help="JSON file containing model profiles",
+    )
+
+    agent_profiles = subparsers.add_parser(
+        "agent-profiles",
+        help="list reproducible Pi agent profiles",
+    )
+    agent_profiles.add_argument(
+        "--agent-profiles-file",
+        type=Path,
+        default=Path("configs/agent-profiles.json"),
+        help="JSON file containing agent profiles",
     )
 
     subparsers.add_parser("versions", help="show pinned framework and harness versions")
 
-    doctor = subparsers.add_parser("doctor", help="check local prerequisites and a profile")
-    _add_profile_arguments(doctor)
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="check local prerequisites and one model-and-agent setup",
+    )
+    _add_model_and_agent_profile_arguments(doctor)
 
-    run = subparsers.add_parser("run", help="run Inspect planning or coding suites")
-    run.add_argument("phase", choices=["planning", "coding", "all"])
-    _add_profile_arguments(run)
+    run = subparsers.add_parser("run", help="run an Inspect outcome suite")
+    _add_model_and_agent_profile_arguments(run)
     run.add_argument("--logs-dir", type=Path, default=Path("logs"))
     run.add_argument("--results-dir", type=Path, default=Path("results"))
     run.add_argument(
         "--dataset",
         type=Path,
-        help="dataset for a planning or coding run; cannot be used with phase=all",
-    )
-    run.add_argument(
-        "--planning-dataset",
-        type=Path,
-        default=Path("evals/planning/sample.jsonl"),
-        help="planning dataset used when phase=all",
-    )
-    run.add_argument(
-        "--coding-dataset",
-        type=Path,
-        default=Path("evals/coding/sample.jsonl"),
-        help="coding dataset used when phase=all",
+        default=Path("evals/sample/cases.jsonl"),
+        help="outcome dataset to run",
     )
     run.add_argument("--epochs", type=int, default=1)
     run.add_argument(
@@ -92,20 +121,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--build",
         action="store_true",
         help="build the pinned sandbox image before evaluating",
-    )
-    run.add_argument(
-        "--grader-model",
-        help=(
-            "independent model used for weighted planning-rubric scoring; "
-            "omit to use deterministic concept smoke scoring"
-        ),
-    )
-    run.add_argument(
-        "--grader-profile",
-        help=(
-            "profile used as the independent planning grader; recommended when "
-            "the evaluated model and grader need different endpoints or credentials"
-        ),
     )
     run.add_argument(
         "--cost-limit",
@@ -126,33 +141,38 @@ def build_parser() -> argparse.ArgumentParser:
 
     campaign = subparsers.add_parser(
         "campaign",
-        help="run the same suite sequentially across several profiles",
+        help="run the same suite across several model-and-agent setups",
     )
-    campaign.add_argument("phase", choices=["planning", "coding", "all"])
     campaign.add_argument(
-        "--run-profile",
+        "--model-profile",
         action="append",
         required=True,
-        help="profile to run; repeat for each local or hosted model",
+        help="model profile to run; repeat for each local or hosted model",
     )
     campaign.add_argument(
-        "--profiles",
+        "--model-profiles-file",
         type=Path,
         default=Path("configs/model-baselines.local.json"),
+        help="JSON file containing model profiles",
+    )
+    campaign.add_argument(
+        "--agent-profile",
+        action="append",
+        help=("agent profile to run; repeat to compare several Pi setups (default: vanilla)"),
+    )
+    campaign.add_argument(
+        "--agent-profiles-file",
+        type=Path,
+        default=Path("configs/agent-profiles.json"),
+        help="JSON file containing agent profiles",
     )
     campaign.add_argument("--env-file", type=Path, default=Path(".env.local"))
     campaign.add_argument("--logs-dir", type=Path, default=Path("logs"))
     campaign.add_argument("--results-dir", type=Path, default=Path("results"))
-    campaign.add_argument("--dataset", type=Path)
     campaign.add_argument(
-        "--planning-dataset",
+        "--dataset",
         type=Path,
-        default=Path("evals/planning/sample.jsonl"),
-    )
-    campaign.add_argument(
-        "--coding-dataset",
-        type=Path,
-        default=Path("evals/coding/sample.jsonl"),
+        default=Path("evals/starter/cases.jsonl"),
     )
     campaign.add_argument("--epochs", type=int, default=3)
     campaign.add_argument("--campaign", required=True)
@@ -161,37 +181,14 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["unspecified", "cold", "warm"],
         default="unspecified",
     )
-    campaign.add_argument("--grader-profile")
-    campaign.add_argument("--grader-model")
     campaign.add_argument("--cost-limit", type=float)
     campaign.add_argument("--build", action="store_true")
     campaign.add_argument("--resume", action="store_true")
     campaign.add_argument("--retry-attempts", type=int, default=1)
 
-    rescore = subparsers.add_parser(
-        "rescore-planning",
-        help="apply a new independent rubric grader to a completed Inspect log",
-    )
-    rescore.add_argument("log_file", type=Path)
-    grader = rescore.add_mutually_exclusive_group(required=True)
-    grader.add_argument("--grader-model")
-    grader.add_argument("--grader-profile")
-    rescore.add_argument(
-        "--profiles",
-        type=Path,
-        default=Path("configs/model-baselines.example.json"),
-    )
-    rescore.add_argument("--env-file", type=Path)
-    rescore.add_argument("--output-log", type=Path)
-    rescore.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="replace the source Inspect log instead of writing *.rescored.eval",
-    )
-
     replay = subparsers.add_parser(
-        "replay-coding",
-        help="reapply saved coding diffs and rerun protected verifiers",
+        "replay-outcome",
+        help="reapply a saved repository diff and rerun its protected verifier",
     )
     replay.add_argument("log_file", type=Path)
     replay.add_argument(
@@ -202,7 +199,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     prove = subparsers.add_parser(
         "prove-case",
-        help="prove that one coding case fails before and passes after a known-good patch",
+        help="prove that one outcome case fails before and passes after a known-good patch",
     )
     prove.add_argument("dataset", type=Path)
     prove.add_argument("--known-good-diff", type=Path, required=True)

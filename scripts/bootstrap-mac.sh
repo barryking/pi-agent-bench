@@ -28,5 +28,5 @@ docker compose -f docker/compose.yaml build
 echo
 echo "Setup complete."
 echo "1. Edit .env.local and configs/model-baselines.local.json"
-echo "2. Run: .venv/bin/pi-bench doctor --profile <name> --profiles configs/model-baselines.local.json --env-file .env.local"
+echo "2. Run: .venv/bin/pi-bench doctor --model-profile <name> --model-profiles-file configs/model-baselines.local.json --env-file .env.local"
 echo "3. See: README.md#run-your-first-campaign"

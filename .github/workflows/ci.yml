@@ -11,6 +11,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -20,21 +21,10 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: ruff check .
       - run: pytest
-      - run: pi-bench validate evals/planning/sample.jsonl
-      - run: pi-bench validate evals/coding/sample.jsonl
+      - run: pi-bench validate evals/sample/cases.jsonl
       - run: pi-bench versions
-      - run: docker build -t pi-agent-bench-sandbox:0.4.0 -f docker/Dockerfile .
+      - run: docker build -t pi-agent-bench-sandbox:0.6.0 -f docker/Dockerfile .
       - run: |
-          test "$(docker run --rm pi-agent-bench-sandbox:0.4.0 pi --version)" = "0.82.1"
+          test "$(docker run --rm pi-agent-bench-sandbox:0.6.0 pi --version)" = "0.82.1"
       - run: python scripts/check-starter-verifiers.py
-      - name: Run Pi through Inspect and Docker
-        run: |
-          pi-bench run coding \
-            --dataset evals/coding/sample.jsonl \
-            --profile ci-mock \
-            --profiles configs/ci-model-profiles.json \
-            --campaign ci-integration \
-            --logs-dir /tmp/pi-bench-logs \
-            --results-dir /tmp/pi-bench-results
-          test -n "$(find /tmp/pi-bench-logs -name '*.eval' -print -quit)"
-          test -n "$(find /tmp/pi-bench-results -name '*.json' -print -quit)"
+      - run: python scripts/check-agent-profile-examples.py

@@ -10,11 +10,12 @@ import webbrowser
 from pathlib import Path
 
 from .cli_commands import (
+    _command_agent_profiles,
     _command_demo,
     _command_export,
     _command_init,
+    _command_model_profiles,
     _command_new_case,
-    _command_profiles,
     _command_prove,
     _command_replay,
     _command_report,
@@ -24,8 +25,8 @@ from .cli_commands import (
 from .cli_execution import (
     _campaign,
     _doctor,
-    _rescore_planning,
-    _resolve_profile,
+    _resolve_agent_profile,
+    _resolve_model_profile,
     _run,
 )
 from .cli_parser import build_parser
@@ -37,13 +38,13 @@ def main() -> None:
         "init": _command_init,
         "new-case": _command_new_case,
         "validate": _command_validate,
-        "profiles": _command_profiles,
+        "model-profiles": _command_model_profiles,
+        "agent-profiles": _command_agent_profiles,
         "versions": _command_versions,
         "doctor": _command_doctor,
         "run": _run,
         "campaign": _campaign,
-        "rescore-planning": _rescore_planning,
-        "replay-coding": _command_replay,
+        "replay-outcome": _command_replay,
         "prove-case": _command_prove,
         "export": _command_export,
         "report": _command_report,
@@ -54,11 +55,15 @@ def main() -> None:
 
 
 def _command_doctor(args: argparse.Namespace) -> None:
-    profile = _resolve_profile(args)
-    failures = _doctor(profile)
+    profile = _resolve_model_profile(args)
+    agent_profile = _resolve_agent_profile(args)
+    failures = _doctor(profile, agent_profile)
     if failures:
         raise SystemExit("\n".join(failures))
-    print(f"ready: profile={profile.name}; model={profile.model}")
+    print(
+        f"ready: model-profile={profile.name}; agent-profile={agent_profile.name}; "
+        f"model={profile.model}"
+    )
 
 
 def _command_view(args: argparse.Namespace) -> None:
@@ -99,9 +104,7 @@ def _start_inspect_view(
 ) -> subprocess.Popen:
     inspect_executable = Path(sys.executable).with_name("inspect")
     if not inspect_executable.is_file():
-        raise SystemExit(
-            "Inspect CLI is missing from this environment; reinstall Pi Agent Bench"
-        )
+        raise SystemExit("Inspect CLI is missing from this environment; reinstall Pi Agent Bench")
     source = logs_dir.expanduser().resolve()
     source.mkdir(parents=True, exist_ok=True)
     command = [

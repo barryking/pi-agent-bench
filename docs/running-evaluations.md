@@ -1,142 +1,97 @@
-# Running and comparing models
+# Run a benchmark
 
-This page shows the safe order for a real comparison.
+## 1. Set up the Mac
 
-## Why cloud models go first
-
-Test a new case with strong cloud models before testing a local model.
-
-This answers an important question:
-
-> Is the case clear and possible?
-
-If strong cloud models keep failing, the case may be too large, unclear, or
-broken. Fix the case before blaming a local model.
-
-## 1. Check every profile
-
-List the profiles:
+Follow [Clean Mac setup](setup-mac.md), then activate the local environment:
 
 ```bash
-pi-bench profiles \
-  --profiles configs/model-baselines.local.json
+source .venv/bin/activate
 ```
 
-Check each one:
+## 2. Check a setup
 
 ```bash
 pi-bench doctor \
-  --profile hosted-quality \
-  --profiles configs/model-baselines.local.json \
+  --model-profile hosted-quality \
+  --model-profiles-file configs/model-baselines.local.json \
+  --agent-profile vanilla \
+  --agent-profiles-file configs/agent-profiles.local.json \
   --env-file .env.local
 ```
 
-Do not run a profile until `doctor` says it is ready.
+`ready` means the Mac, Docker, model profile, and agent profile can be used.
 
-## 2. Check the cases
+## 3. Check the cases
 
 ```bash
-pi-bench validate evals/planning/sample.jsonl
-pi-bench validate evals/coding/sample.jsonl
+pi-bench validate evals/starter/cases.jsonl
 ```
 
-For the five owned starter cases:
+Each case contains:
+
+- a clean starting repository;
+- one requested outcome;
+- time, turn, context, and token limits;
+- a protected verifier;
+- a quality threshold; and
+- any critical checks that must pass.
+
+## 4. Run cloud controls
 
 ```bash
-pi-bench validate evals/starter/planning.jsonl
-pi-bench validate evals/starter/coding.jsonl
-```
-
-For the first real pilot, use:
-
-```bash
-pi-bench validate evals/pilots/user-list-filter/planning.jsonl
-pi-bench validate evals/pilots/user-list-filter/coding.jsonl
-```
-
-Its coding case has been proved with an untouched failure and a known-good
-success.
-
-For a new coding case:
-
-1. the untouched fixture must fail;
-2. a known-good answer must pass;
-3. the verifier must check behaviour, not one exact code shape;
-4. the task should fit inside 30 minutes, 45 turns, and 150,000 total tokens.
-
-Draft cases cannot run.
-
-## 3. Run hosted controls
-
-For coding:
-
-```bash
-pi-bench campaign coding \
-  --run-profile hosted-quality \
-  --run-profile hosted-cost \
-  --dataset evals/starter/coding.jsonl \
-  --profiles configs/model-baselines.local.json \
+pi-bench campaign \
+  --model-profile openai-codex-gpt-5.6-sol \
+  --model-profile openai-codex-gpt-5.6-luna \
+  --model-profiles-file configs/model-baselines.local.json \
+  --agent-profile vanilla \
+  --agent-profiles-file configs/agent-profiles.local.json \
   --env-file .env.local \
-  --campaign case-check-v1 \
+  --dataset evals/starter/cases.jsonl \
+  --campaign starter-outcome-v1 \
   --epochs 3 \
   --resume
 ```
 
-Read every failure in Inspect. A good case should normally succeed in at least
-two of three trials on both capable cloud models.
+## 5. Run the local model
 
-## 4. Run the local model
-
-Use the same:
-
-- dataset;
-- campaign name;
-- number of trials;
-- Pi version;
-- Docker image;
-- tools; and
-- limits.
+Use the same dataset, campaign name, agent profile, limits, Pi version, and
+container:
 
 ```bash
-pi-bench campaign coding \
-  --run-profile local-candidate \
-  --dataset evals/starter/coding.jsonl \
-  --profiles configs/model-baselines.local.json \
+pi-bench campaign \
+  --model-profile local-candidate \
+  --model-profiles-file configs/model-baselines.local.json \
+  --agent-profile vanilla \
+  --agent-profiles-file configs/agent-profiles.local.json \
   --env-file .env.local \
-  --campaign case-check-v1 \
+  --dataset evals/starter/cases.jsonl \
+  --campaign starter-outcome-v1 \
   --epochs 3 \
   --resume
 ```
 
-Using the same campaign name tells the dashboard these results belong together.
+## 6. Compare agent profiles
 
-## 5. Run planning
-
-Planning needs a separate grader model:
+Keep the model fixed and repeat `--agent-profile`:
 
 ```bash
-pi-bench campaign planning \
-  --run-profile hosted-quality \
-  --run-profile hosted-cost \
-  --run-profile local-candidate \
-  --dataset evals/starter/planning.jsonl \
-  --grader-profile independent-grader \
-  --profiles configs/model-baselines.local.json \
+pi-bench campaign \
+  --model-profile hosted-quality \
+  --agent-profile vanilla \
+  --agent-profile team-agent \
+  --model-profiles-file configs/model-baselines.local.json \
+  --agent-profiles-file configs/agent-profiles.local.json \
   --env-file .env.local \
-  --campaign planning-check-v1 \
+  --dataset evals/starter/cases.jsonl \
+  --campaign agent-profile-v1 \
   --epochs 3 \
   --resume
 ```
 
-The grader must not grade itself.
+A plan-first setup is just a normal agent profile whose guidance asks Pi to
+plan. Test-first, review-first, MCP, skills, and tool changes work the same way.
 
-## 6. See the results
-
-Rebuild the small chart files from Inspect:
-
-```bash
-pi-bench export --logs-dir logs --results-dir results
-```
+## 7. View results
 
 ```bash
 pi-bench view \
@@ -145,95 +100,14 @@ pi-bench view \
   --inspect
 ```
 
-Use the Pi Agent Bench dashboard to compare models.
+The Pi Agent Bench dashboard compares setups. Inspect shows the full messages,
+tool calls, plan text, edits, verifier output, tokens, time, and errors.
 
-The Inspect log is the main evidence. The dashboard data is a copy.
-
-Use Inspect to answer questions such as:
-
-- What did Pi ask the model?
-- Which tools did it use?
-- Where did it get stuck?
-- Why did the verifier fail?
-
-## What to compare
-
-Look at several facts together:
-
-- success rate;
-- quality score;
-- failed verifier parts;
-- time for successful tasks;
-- tokens used for successful tasks;
-- tool failures;
-- retries;
-- cost, when the provider reports it;
-- output tokens each second for local servers; and
-- examples of good and bad runs.
-
-Do not choose a winner using one number alone.
-
-## When ranking is allowed
-
-The dashboard only ranks models when:
-
-- at least two profiles are present;
-- every profile has the same shared cases;
-- at least five cases are shared;
-- every profile and case has at least three trials;
-- the dataset version matches; and
-- the benchmark files match.
-
-If these rules are not met, the dashboard still shows the data. It also says
-why the evidence is not ready for ranking.
-
-## Cold and warm local runs
-
-A cold run starts without a useful cache.
-
-A warm run may reuse saved model work.
-
-Keep them in separate campaigns or label them:
+## 8. Recheck a saved result
 
 ```bash
---cache-state cold
+pi-bench replay-outcome logs/<run>.eval
 ```
 
-or:
-
-```bash
---cache-state warm
-```
-
-Do not mix cold and warm results in one comparison.
-
-## If a run stops
-
-Use `--resume`. Inspect will keep completed work and continue missing work.
-
-Interrupted or broken attempts are stored under:
-
-```text
-results/_invalid/
-```
-
-They do not enter model rankings.
-
-## Check old work again
-
-Re-grade planning:
-
-```bash
-pi-bench rescore-planning logs/<planning-log>.eval \
-  --grader-profile independent-grader \
-  --profiles configs/model-baselines.local.json \
-  --env-file .env.local
-```
-
-Replay coding verification:
-
-```bash
-pi-bench replay-coding logs/<coding-log>.eval
-```
-
-This avoids paying the candidate model to repeat work it already did.
+This applies the saved diff to a temporary starting repository and runs the protected
+verifier again. It does not call the model.

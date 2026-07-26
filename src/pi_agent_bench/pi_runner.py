@@ -21,6 +21,10 @@ class PiRunConfig:
     executable: str = "pi"
     tools: tuple[str, ...] = ("read", "bash", "edit", "write", "grep", "find", "ls")
     isolate_resources: bool = True
+    context_files_enabled: bool = False
+    skills_enabled: bool = False
+    extensions_enabled: bool = False
+    prompt_templates_enabled: bool = False
     thinking_level: str | None = None
 
 
@@ -57,15 +61,15 @@ def build_command(config: PiRunConfig, prompt: str) -> tuple[str, ...]:
         trust_flag,
     ]
     if config.isolate_resources:
-        command.extend(
-            [
-                "--no-skills",
-                "--no-extensions",
-                "--no-prompt-templates",
-                "--no-themes",
-                "--no-context-files",
-            ]
-        )
+        if not config.skills_enabled:
+            command.append("--no-skills")
+        if not config.extensions_enabled:
+            command.append("--no-extensions")
+        if not config.prompt_templates_enabled:
+            command.append("--no-prompt-templates")
+        command.append("--no-themes")
+        if not config.context_files_enabled:
+            command.append("--no-context-files")
     if config.tools:
         command.extend(["--tools", ",".join(config.tools)])
     if config.thinking_level:

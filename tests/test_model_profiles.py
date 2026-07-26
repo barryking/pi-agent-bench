@@ -55,6 +55,22 @@ def test_profile_reports_missing_environment(tmp_path):
         profile.resolved_runtime_env({"DGX_BASE_URL": "http://dgx:8000/v1"})
 
 
+def test_profile_fingerprint_includes_the_exact_model(tmp_path):
+    first = load_profiles(write_profiles(tmp_path))["dgx"]
+    second = type(first)(
+        name=first.name,
+        kind=first.kind,
+        model="openai/a-different-model",
+        runtime_env=first.runtime_env,
+        configuration=first.configuration,
+    )
+
+    assert (
+        first.public_identity()["configuration_fingerprint"]
+        != second.public_identity()["configuration_fingerprint"]
+    )
+
+
 def test_env_file_does_not_override_existing_values(tmp_path):
     path = tmp_path / ".env.local"
     path.write_text("TOKEN=file-value\nENDPOINT=http://dgx/v1\n", encoding="utf-8")

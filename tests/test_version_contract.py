@@ -42,7 +42,7 @@ def test_result_record_contains_actual_harness_and_model_versions(tmp_path):
         id="case-1",
         epoch=1,
         scores={"quality": score},
-        metadata={"phase": "planning"},
+        metadata={},
         started_at="2026-07-25T00:00:00Z",
         total_time=1.5,
         model_usage={},
@@ -99,6 +99,8 @@ def test_result_record_contains_actual_harness_and_model_versions(tmp_path):
     assert record["cache_state"] == "warm"
     assert record["harness"]["benchmark_fingerprint"]
     assert record["model_configuration"]["configuration_fingerprint"]
+    assert record["agent_configuration"]["profile"] == "vanilla"
+    assert record["agent_configuration"]["configuration_fingerprint"]
     assert record["timing"]["inspect_working_seconds"] == 3.0
     assert record["timing"]["model_working_seconds"] == 2.0
     assert record["timing"]["tool_working_seconds"] == 0.5
@@ -110,15 +112,14 @@ def test_result_record_uses_explicit_success_threshold(tmp_path):
         value=0.8,
         metadata={
             "success_threshold": 0.75,
-            "scoring_method": "independent-model-weighted-rubric",
-            "grader_model": "mock/grader",
+            "scoring_method": "deterministic-executable-verifier",
         },
     )
     sample = SimpleNamespace(
         id="case-1",
         epoch=1,
         scores={"quality": score},
-        metadata={"phase": "planning"},
+        metadata={},
         started_at="2026-07-25T00:00:00Z",
         total_time=1.5,
         model_usage={},
@@ -147,8 +148,7 @@ def test_result_record_uses_explicit_success_threshold(tmp_path):
 
     assert record["success"] is True
     assert record["score"]["success_threshold"] == 0.75
-    assert record["score"]["method"] == "independent-model-weighted-rubric"
-    assert record["score"]["grader_model"] == "mock/grader"
+    assert record["score"]["method"] == "deterministic-executable-verifier"
 
 
 def test_result_record_can_be_rebuilt_from_profile_identity(tmp_path):
@@ -157,7 +157,7 @@ def test_result_record_can_be_rebuilt_from_profile_identity(tmp_path):
         id="case-from-log",
         epoch=1,
         scores={"quality": score},
-        metadata={"phase": "coding"},
+        metadata={},
         started_at="2026-07-25T00:00:00Z",
         total_time=1.0,
         model_usage={},
@@ -205,8 +205,8 @@ def test_result_record_extracts_structured_inspect_score(tmp_path):
     sample = SimpleNamespace(
         id="case-structured",
         epoch=1,
-        scores={"planning_rubric_scorer": score},
-        metadata={"phase": "planning"},
+        scores={"outcome_verifier_scorer": score},
+        metadata={},
         started_at="2026-07-25T00:00:00Z",
         total_time=1.5,
         model_usage={},
@@ -242,7 +242,10 @@ def test_result_record_extracts_structured_inspect_score(tmp_path):
         "legacy": 1.0,
         "tests": 1.0,
     }
-    assert record["inspect_scores"]["planning_rubric_scorer"]["value"]["quality"] == 0.8
+    assert (
+        record["inspect_scores"]["outcome_verifier_scorer"]["value"]["quality"]
+        == 0.8
+    )
 
 
 def test_incomplete_log_is_recorded_but_excluded_from_rankings(tmp_path):

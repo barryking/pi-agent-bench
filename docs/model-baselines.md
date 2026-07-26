@@ -13,14 +13,29 @@ Two runs are not the same profile when they use different:
 
 Record these details in the profile JSON.
 
+Reasoning level is a model setting, not an agent setting. Record it as:
+
+```json
+{
+  "configuration": {
+    "thinking_level": "high"
+  }
+}
+```
+
+Allowed values are `none` or `off`, `minimal`, `low`, `medium`, `high`,
+`xhigh`, and `max`. The provider may support only some of them. Pi Agent Bench
+passes the value through Inspect for normal API runs and through Pi for direct
+subscription runs. It translates `none` and `off` when the two tools use
+different words for the same choice.
+
 ## Start with roles, not favourite models
 
 Prepare profiles for:
 
 - a local candidate;
 - a strong hosted control;
-- a cheaper hosted control;
-- an independent planning grader; and
+- a cheaper hosted control; and
 - an optional subscription control.
 
 Model names change over time. Check current provider and model documentation
@@ -66,6 +81,7 @@ Before accepting results, record:
 - KV-cache settings;
 - prefix caching;
 - temperature and seed, when supported;
+- reasoning level, when supported;
 - hardware; and
 - cost currency for billed providers.
 

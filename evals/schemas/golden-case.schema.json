@@ -4,24 +4,16 @@
   "title": "Pi Agent Bench Golden Case",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "phase", "instruction", "limits", "expected", "metadata"],
+  "required": ["id", "instruction", "limits", "expected", "metadata"],
   "properties": {
     "id": {
       "type": "string",
       "minLength": 1,
       "pattern": "^[a-z0-9][a-z0-9._-]*$"
     },
-    "phase": {
-      "enum": ["planning", "coding"]
-    },
     "instruction": {
       "type": "string",
       "minLength": 1
-    },
-    "context_files": {
-      "type": "array",
-      "items": {"type": "string", "minLength": 1},
-      "uniqueItems": true
     },
     "tags": {
       "type": "array",
@@ -43,16 +35,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "required_concepts": {
-          "type": "array",
-          "items": {"type": "string", "minLength": 1},
-          "uniqueItems": true
-        },
-        "forbidden_concepts": {
-          "type": "array",
-          "items": {"type": "string", "minLength": 1},
-          "uniqueItems": true
-        },
         "verifier_command": {
           "type": "array",
           "items": {"type": "string", "minLength": 1}
@@ -66,23 +48,6 @@
           },
           "uniqueItems": true
         },
-        "rubric": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["id", "description"],
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "pattern": "^[a-z0-9][a-z0-9._-]*$"
-              },
-              "description": {"type": "string", "minLength": 1},
-              "weight": {"type": "number", "exclusiveMinimum": 0}
-            }
-          }
-        },
         "success_threshold": {
           "type": "number",
           "exclusiveMinimum": 0,
@@ -92,9 +57,26 @@
     },
     "metadata": {
       "type": "object",
-      "required": ["dataset_version", "draft", "synthetic"],
+      "required": [
+        "dataset_version",
+        "starting_repository",
+        "score_components",
+        "draft",
+        "synthetic"
+      ],
       "properties": {
         "dataset_version": {"type": "string", "minLength": 1},
+        "starting_repository": {"type": "string", "minLength": 1},
+        "score_components": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
         "draft": {"type": "boolean"},
         "synthetic": {"type": "boolean"}
       }

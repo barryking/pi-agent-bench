@@ -20,9 +20,12 @@ Pi Agent Bench records:
 
 - quality from `0` to `1`;
 - success as yes or no;
-- each verifier or rubric part;
+- each verifier part;
 - success across repeated trials; and
 - how steady the result is.
+
+The dashboard treats one model-and-agent pair as one comparison arm. For
+example, `model-a + team-agent` stays separate from `model-a` using vanilla Pi.
 
 Inspect also calculates:
 
@@ -161,6 +164,10 @@ results/metrics.jsonl
 This is one metric fact on each line. It is easy for chart and database tools
 to read.
 
+Every line includes both `model_profile` and `agent_profile`. It also includes
+safe configuration hashes. This lets another chart tool compare the same model
+with different tools or instructions.
+
 ## Dashboard charts
 
 The dashboard shows:
@@ -178,7 +185,8 @@ The dashboard shows:
 - rank changes across trials; and
 - history for one case.
 
-Planning and coding are never mixed in one score.
+Each score measures one finished outcome. Planning is agent-profile evidence,
+not a separate score that is mixed with the final result.
 
 Different dataset versions are never mixed.
 

@@ -75,6 +75,31 @@ def test_builds_direct_command_with_explicit_thinking_level():
     )[-4:]
 
 
+def test_enables_only_the_selected_agent_resources():
+    command = build_command(
+        PiRunConfig(
+            provider="inspect-bridge",
+            model="inspect",
+            timeout_seconds=60,
+            trust_mode="approve",
+            tools=("read", "custom_tool"),
+            context_files_enabled=True,
+            skills_enabled=True,
+            extensions_enabled=True,
+            prompt_templates_enabled=True,
+        ),
+        "Implement the task.",
+    )
+
+    assert "--approve" in command
+    assert "--no-context-files" not in command
+    assert "--no-skills" not in command
+    assert "--no-extensions" not in command
+    assert "--no-prompt-templates" not in command
+    assert "--no-themes" in command
+    assert command[command.index("--tools") + 1] == "read,custom_tool"
+
+
 def test_parses_and_summarises_pi_events():
     stdout = "\n".join(
         [

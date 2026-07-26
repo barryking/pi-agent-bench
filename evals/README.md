@@ -1,40 +1,31 @@
-# Test cases
+# Benchmark cases
 
-Keep case files in these places:
+Each JSONL file contains complete outcome cases.
 
 ```text
-evals/
-  planning/                 small fake planning checks
-  coding/                   small fake coding checks
-  starter/                  five owned, ready-to-run case pairs
-  pilots/
-    user-list-filter/       first real pilot
-    user-idempotency/       harder real pilot
-  schemas/                  case file rules
+sample/cases.jsonl                 two small smoke cases
+starter/cases.jsonl                five owned starter cases
+pilots/<name>/cases.jsonl          larger real-repository cases
+schemas/golden-case.schema.json    case format
 ```
 
-Each real pilot folder contains:
+There is no separate planning dataset. Planning, test-first work, tools,
+skills, and review instructions belong to the selected agent profile. Every
+profile is judged by the same final outcome verifier.
 
-- `planning.jsonl`;
-- `coding.jsonl`; and
-- a short README.
+Each case points to:
 
-The starter suite is the normal first benchmark. Its fixtures are committed
-under `fixtures/`, are covered by this project's MIT licence, and need no
-download.
+- a starting repository;
+- one protected verifier under `verifiers/<case-id>/`;
+- limits;
+- a success threshold; and
+- required score components.
 
-Starting repositories live under `repos/`. Real repositories are ignored by
-Git.
+Run:
 
-Protected coding checks live under `verifiers/<coding-case-id>/`. Docker puts
-them in `/opt/verifiers/`, where Pi cannot read them.
+```bash
+pi-bench validate evals/starter/cases.jsonl
+```
 
-Do not keep several old copies of a case. When a case changes:
-
-1. change its dataset version;
-2. keep old Inspect logs;
-3. replace the case file; and
-4. explain the important change in the pilot README.
-
-Inspect logs keep the old run evidence. We do not need old case files with
-names such as `v1-final-new-2`.
+Read [Scoring and making cases](../docs/scoring-and-extending.md) before adding
+a case.

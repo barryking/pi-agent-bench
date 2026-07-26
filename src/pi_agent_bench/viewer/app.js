@@ -1,4 +1,3 @@
-    $("phase").addEventListener("change", () => { refreshCohortControls(); render(); });
     ["dataset", "campaign"].forEach(id => $(id).addEventListener("change", () => { refreshCohortControls(); render(); }));
     ["cache", "metric", "trend-case", "baseline", "common-only"].forEach(id => $(id).addEventListener("change", render));
     $("file").addEventListener("change", async event => {

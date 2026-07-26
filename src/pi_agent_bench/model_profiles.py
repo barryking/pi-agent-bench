@@ -69,8 +69,23 @@ class ModelProfile:
         return {target: environ[source] for target, source in self.runtime_env.items()}
 
     def public_identity(self) -> dict[str, Any]:
-        configuration_json = json.dumps(
-            self.configuration,
+        execution = (
+            {
+                "mode": "pi-direct",
+                "provider": self.pi_direct["provider"],
+                "model": self.pi_direct["model"],
+                "auth_file_env": self.pi_direct["auth_file_env"],
+            }
+            if self.pi_direct
+            else {"mode": "inspect-bridge"}
+        )
+        fingerprint_input = json.dumps(
+            {
+                "kind": self.kind,
+                "model": self.model,
+                "configuration": self.configuration,
+                "execution": execution,
+            },
             sort_keys=True,
             separators=(",", ":"),
         )
@@ -80,19 +95,10 @@ class ModelProfile:
             "model": self.model,
             "configuration": self.configuration,
             "configuration_fingerprint": hashlib.sha256(
-                configuration_json.encode()
+                fingerprint_input.encode()
             ).hexdigest(),
             "runtime_environment": sorted(self.runtime_env),
-            "execution": (
-                {
-                    "mode": "pi-direct",
-                    "provider": self.pi_direct["provider"],
-                    "model": self.pi_direct["model"],
-                    "auth_file_env": self.pi_direct["auth_file_env"],
-                }
-                if self.pi_direct
-                else {"mode": "inspect-bridge"}
-            ),
+            "execution": execution,
         }
 
     def readiness_errors(self) -> list[str]:
