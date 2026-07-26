@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/barryking/pi-agent-bench/evals/schemas/golden-case.schema.json",
+  "title": "Pi Agent Bench Golden Case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "phase", "instruction", "limits", "expected"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "phase": {
+      "enum": ["planning", "coding", "end_to_end"]
+    },
+    "instruction": {
+      "type": "string",
+      "minLength": 1
+    },
+    "context_files": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seconds", "turns", "context_tokens"],
+      "properties": {
+        "seconds": {"type": "integer", "minimum": 1},
+        "turns": {"type": "integer", "minimum": 1},
+        "context_tokens": {"type": "integer", "minimum": 1},
+        "total_tokens": {"type": "integer", "minimum": 1}
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required_concepts": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "forbidden_concepts": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "verifier_command": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1
+        },
+        "rubric": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "description"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9._-]*$"
+              },
+              "description": {"type": "string", "minLength": 1},
+              "weight": {"type": "number", "exclusiveMinimum": 0}
+            }
+          }
+        },
+        "success_threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "metadata": {
+      "type": "object"
+    }
+  }
+}

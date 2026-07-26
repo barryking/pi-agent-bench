@@ -1,0 +1,120 @@
+"""Small, non-execution command handlers."""
+
+from __future__ import annotations
+
+import argparse
+import json
+
+from .dataset import load_cases
+from .model_profiles import load_profiles
+from .versions import FRAMEWORK_VERSION, INSPECT_VERSION, PI_VERSION, SANDBOX_IMAGE
+
+
+def _command_init(args: argparse.Namespace) -> None:
+    from .workflow import initialize_workspace
+
+    for path, status in initialize_workspace(args.root):
+        print(f"{status}: {path}")
+    print("next: edit .env.local and configs/model-baselines.local.json")
+
+
+def _command_new_case(args: argparse.Namespace) -> None:
+    from .workflow import scaffold_case
+
+    try:
+        paths = scaffold_case(
+            args.phase,
+            args.id,
+            args.dataset,
+            dataset_version=args.dataset_version,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    for path in paths:
+        print(f"created: {path}")
+    print(f"next: edit the scaffold, then pi-bench validate {args.dataset}")
+
+
+def _command_validate(args: argparse.Namespace) -> None:
+    cases = load_cases(args.dataset)
+    phases = sorted({case.phase for case in cases})
+    if len(phases) != 1:
+        raise SystemExit("dataset must contain exactly one phase")
+    if phases[0] in {"planning", "coding"}:
+        from .inspect_tasks import load_case_suite
+
+        try:
+            load_case_suite(args.dataset, phases[0])
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+    print(f"valid: {len(cases)} case(s); phases={','.join(phases)}")
+
+
+def _command_profiles(args: argparse.Namespace) -> None:
+    for profile in load_profiles(args.profiles).values():
+        print(f"{profile.name}: {profile.kind}; model={profile.model}")
+
+
+def _command_versions(_args: argparse.Namespace) -> None:
+    print(f"framework={FRAMEWORK_VERSION}")
+    print(f"inspect={INSPECT_VERSION}")
+    print(f"pi={PI_VERSION}")
+    print(f"sandbox={SANDBOX_IMAGE}")
+
+
+def _command_replay(args: argparse.Namespace) -> None:
+    from .replay import replay_coding_log
+
+    try:
+        paths = replay_coding_log(args.log_file, args.output_dir)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    for path in paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        state = "MATCH" if payload["score_matches"] else "MISMATCH"
+        print(f"{state}: {path}")
+
+
+def _command_prove(args: argparse.Namespace) -> None:
+    from .case_proof import prove_coding_case
+
+    try:
+        path = prove_coding_case(args.dataset, args.known_good_diff, args.output)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(f"proved: {path}")
+
+
+def _command_export(args: argparse.Namespace) -> None:
+    from .run_records import export_inspect_logs
+
+    paths = export_inspect_logs(args.logs_dir, args.results_dir)
+    print(f"exported: {len(paths)} sample record(s) from Inspect logs")
+
+
+def _command_report(args: argparse.Namespace) -> None:
+    from .reporting import build_report, write_report, write_visualizer_exports
+
+    output = args.output or args.results_dir / "summary.md"
+    markdown, summary_json = write_report(build_report(args.results_dir), output)
+    runs_csv, metrics_jsonl = write_visualizer_exports(args.results_dir, output.parent)
+    print(f"report: {markdown}")
+    print(f"summary: {summary_json}")
+    print(f"runs: {runs_csv}")
+    print(f"metrics: {metrics_jsonl}")
+
+
+def _command_demo(args: argparse.Namespace) -> None:
+    if args.trials < 1:
+        raise SystemExit("--trials must be a positive integer")
+    from .demo_data import generate_demo_results
+    from .reporting import build_report, write_report, write_visualizer_exports
+
+    try:
+        paths = generate_demo_results(args.output_dir, trials=args.trials)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    write_report(build_report(args.output_dir), args.output_dir / "summary.md")
+    write_visualizer_exports(args.output_dir)
+    print(f"demo: {len(paths)} synthetic samples in {args.output_dir}")
+    print(f"view: pi-bench view --results-dir {args.output_dir}")
