@@ -1,0 +1,163 @@
+"""Prove a Pi Agent Bench coding case before using it."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from .inspect_tasks import load_case_suite
+from .verification import finite_number, verifier_payload
+from .versions import SANDBOX_IMAGE
+from .workspace import prepare_workspace
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+def prove_coding_case(
+    dataset: str | Path,
+    known_good_diff: str | Path,
+    output: str | Path,
+) -> Path:
+    """Run one protected verifier before and after a known-good patch."""
+    source, cases, dataset_version = load_case_suite(dataset, "coding")
+    if len(cases) != 1:
+        raise ValueError("case proof needs a dataset containing exactly one coding case")
+    case = cases[0]
+    if case.metadata.get("draft") is True:
+        raise ValueError(f"{case.id}: finish the draft before proving it")
+
+    fixture = _resolve_fixture(case.metadata.get("fixture"), source)
+    patch_path = Path(known_good_diff).expanduser().resolve()
+    if not patch_path.is_file():
+        raise ValueError(f"known-good diff does not exist: {patch_path}")
+    patch = patch_path.read_text(encoding="utf-8")
+    if not patch.strip():
+        raise ValueError("known-good diff is empty")
+
+    temporary_parent = REPOSITORY_ROOT / "repos"
+    temporary_parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".case-proof-", dir=temporary_parent) as temporary:
+        root = Path(temporary)
+        before_workspace = root / "before"
+        after_workspace = root / "after"
+        prepare_workspace(fixture, "", before_workspace)
+        prepare_workspace(fixture, patch, after_workspace)
+        before = _run_verifier(before_workspace, case.expected.verifier_command)
+        after = _run_verifier(after_workspace, case.expected.verifier_command)
+
+    proof = assess_case_proof(
+        before,
+        after,
+        success_threshold=case.expected.success_threshold,
+    )
+    record = {
+        "schema_version": 1,
+        "case_id": case.id,
+        "dataset_version": dataset_version,
+        "proved_at": datetime.now(UTC).isoformat(),
+        "fixture": str(fixture),
+        "source_commit": case.metadata.get("source_commit"),
+        "sandbox_image": SANDBOX_IMAGE,
+        "verifier_command": list(case.expected.verifier_command),
+        "known_good_diff_sha256": hashlib.sha256(patch.encode()).hexdigest(),
+        **proof,
+    }
+    destination = Path(output).expanduser().resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    if not proof["proved"]:
+        raise ValueError(
+            f"{case.id}: case proof failed; see {destination} "
+            f"(before={proof['before']['quality']}, after={proof['after']['quality']})"
+        )
+    return destination
+
+
+def assess_case_proof(
+    before: dict[str, Any],
+    after: dict[str, Any],
+    *,
+    success_threshold: float,
+) -> dict[str, Any]:
+    """Check the two scores without hiding missing or broken verifier output."""
+    before_quality = _quality(before)
+    after_quality = _quality(after)
+    before_failed = (
+        before_quality is not None and before_quality < success_threshold
+    )
+    after_passed = (
+        after_quality is not None and after_quality >= success_threshold
+    )
+    return {
+        "success_threshold": success_threshold,
+        "before": {
+            "quality": before_quality,
+            "failed_as_expected": before_failed,
+            "components": before.get("components", {}),
+            "explanation": before.get("explanation"),
+        },
+        "after": {
+            "quality": after_quality,
+            "passed_as_expected": after_passed,
+            "components": after.get("components", {}),
+            "explanation": after.get("explanation"),
+        },
+        "proved": before_failed and after_passed,
+    }
+
+
+def _run_verifier(workspace: Path, command: tuple[str, ...]) -> dict[str, Any]:
+    completed = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--user",
+            "root",
+            "--volume",
+            f"{workspace}:/workspace",
+            "--workdir",
+            "/workspace",
+            SANDBOX_IMAGE,
+            *command,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    payload = verifier_payload(completed.stdout)
+    payload["process_return_code"] = completed.returncode
+    if completed.stderr:
+        payload["process_stderr"] = completed.stderr
+    return payload
+
+
+def _resolve_fixture(value: Any, dataset: Path) -> Path:
+    if not isinstance(value, str) or not value:
+        raise ValueError("coding case has no fixture path")
+    requested = Path(value).expanduser()
+    candidates = (
+        [requested]
+        if requested.is_absolute()
+        else [dataset.parent / requested, REPOSITORY_ROOT / requested]
+    )
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.is_dir():
+            return resolved
+    raise ValueError(f"coding fixture does not exist: {candidates[-1].resolve()}")
+
+
+def _quality(payload: dict[str, Any]) -> float | None:
+    return finite_number(payload.get("score"))

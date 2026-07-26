@@ -1,50 +1,86 @@
 # Roadmap
 
-## Phase 1 — Contracts and scaffold
+Checked boxes are done. Empty boxes are still needed.
 
-- [x] Public-safe repository guidance
-- [x] Golden-case schema and validation
-- [x] Synthetic planning and coding examples
-- [x] Pi JSON-event process wrapper
-- [x] Basic deterministic planning checks
-- [ ] Select an open-source licence
+## Foundation
 
-## Phase 2 — Inspect integration
+- [x] Public-safe repository rules
+- [x] Put pilot files under one clear `evals/pilots/<case>/` layout
+- [x] Remove old duplicate pilot case versions
+- [x] Case file format and checks
+- [x] Fake planning and coding examples
+- [x] Clean Docker workspace
+- [x] Real Pi agent inside Docker
+- [ ] Choose an open-source licence
 
-- [ ] Create an Inspect custom agent for Pi
-- [ ] Run Pi inside a disposable Docker sandbox
-- [ ] Route Pi model calls through Inspect's sandbox agent bridge
-- [ ] Capture model usage and trajectory
-- [ ] Enforce time, turn and token limits
+## Inspect and scoring
 
-## Phase 3 — Verifiers
+- [x] Connect Pi to Inspect
+- [x] Keep full Inspect logs
+- [x] Apply time, turn, and token limits
+- [x] Keep each case's exact limits
+- [x] Add quality, success, and score parts
+- [x] Add repeated-trial statistics
+- [x] Add an independent planning grader
+- [x] Re-grade saved planning logs
+- [x] Replay coding verification from saved diffs
+- [x] Prove a coding case fails before and passes after a known-good patch
+- [ ] Check the planning grader against people
 
-- [ ] Execute coding verifier commands after the agent stops
-- [ ] Support weighted verifier results
-- [ ] Add planning rubric scoring
-- [ ] Add an independent judge-model adapter
-- [ ] Add a human-review export
+## Models
 
-## Phase 4 — Provider matrix
+- [x] Add local, strong cloud, and cheaper cloud profile slots
+- [x] Add an independent grader slot
+- [x] Add subscription login support
+- [ ] Run a complete strong cloud baseline
+- [ ] Run a complete local baseline
+- [ ] Test 32K, 64K, and 128K context sizes
+- [ ] Record cold and warm local runs
+- [ ] Fully check direct subscription limits on a real coding run
 
-- [ ] Add DGX Spark vLLM configuration
-- [ ] Add hosted quality control
-- [ ] Add hosted cost control
-- [ ] Record cold and warm inference measures
-- [ ] Run 32K, 64K and 128K context profiles
+## Cases
 
-## Phase 5 — Reporting
+- [x] Add safe case scaffolding
+- [x] Refuse unfinished draft cases
+- [x] Add two real public planning/coding pilot pairs
+- [x] Prove the smaller coding pilot
+- [ ] Build at least five good shared cases
+- [ ] Build a larger private case set
+- [ ] Add a plan-then-code case type
 
-- [ ] Produce per-run JSON artifacts
-- [ ] Aggregate pass rate, median and p95 duration
-- [ ] Categorise failures
-- [ ] Generate quality-versus-time and quality-versus-cost charts
-- [ ] Generate a concise leadership report
+## Reports
+
+- [x] Save one small record per trial
+- [x] Save coding diffs
+- [x] Export CSV and JSONL
+- [x] Rebuild dashboard records from Inspect logs
+- [x] Add a local comparison dashboard
+- [x] Add coverage and ranking checks
+- [x] Show time, tokens, cost, and quality
+- [x] Start Inspect and the dashboard together
+- [ ] Add clear failure groups
+- [x] Show observed output tokens per model second from Inspect
+- [ ] Add first-token and local server-reported speed
+- [ ] Add GPU, power, and energy facts
+- [ ] Make a short leadership report
 
 ## Later
 
-- Public benchmark packaging
-- Harbor/Terminal-Bench compatibility
-- CI regression runs
-- Private golden-dataset integration
-- Hardware utilisation and energy measurements
+- public benchmark packages;
+- private case transport;
+- Harbor or Terminal-Bench checks;
+- many-user load tests;
+- automatic DGX setup;
+- hardware cost estimates.
+
+## Keep the repository lean
+
+For every new feature, ask:
+
+1. Does Inspect already do it?
+2. Is it needed to run Pi, define our cases, check answers, or compare local
+   and cloud models?
+3. Can the output be rebuilt from an Inspect log?
+4. Can an old file or command be removed when the new one is added?
+
+Do not build a second runner, scorer store, or detailed log viewer.

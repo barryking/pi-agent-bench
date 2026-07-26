@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/barryking/dgx-agent-evals/evals/schemas/golden-case.schema.json",
-  "title": "DGX Agent Eval Golden Case",
+  "$id": "https://github.com/barryking/pi-agent-bench/evals/schemas/golden-case.schema.json",
+  "title": "Pi Agent Bench Golden Case",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "phase", "instruction", "limits", "expected"],
@@ -35,7 +35,8 @@
       "properties": {
         "seconds": {"type": "integer", "minimum": 1},
         "turns": {"type": "integer", "minimum": 1},
-        "context_tokens": {"type": "integer", "minimum": 1}
+        "context_tokens": {"type": "integer", "minimum": 1},
+        "total_tokens": {"type": "integer", "minimum": 1}
       }
     },
     "expected": {
@@ -56,6 +57,28 @@
           "type": "array",
           "items": {"type": "string", "minLength": 1},
           "minItems": 1
+        },
+        "rubric": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "description"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9._-]*$"
+              },
+              "description": {"type": "string", "minLength": 1},
+              "weight": {"type": "number", "exclusiveMinimum": 0}
+            }
+          }
+        },
+        "success_threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
         }
       }
     },

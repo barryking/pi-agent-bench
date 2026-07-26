@@ -1,0 +1,18 @@
+# User idempotency pilot
+
+This is the harder pilot case.
+
+It asks the model to make user creation safe when a client repeats the same
+request. The planning and coding files use the same starting repository.
+
+Use the smaller `user-list-filter` pilot first. Use this case after the simple
+path works.
+
+Before using the coding case in a comparison, prove it with:
+
+```bash
+pi-bench prove-case \
+  evals/pilots/user-idempotency/coding.jsonl \
+  --known-good-diff <private-known-good.diff> \
+  --output results/case-proofs/user-idempotency-1.0.json
+```

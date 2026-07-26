@@ -1,75 +1,72 @@
-# Model and context baselines
+# Choosing models and context sizes
 
-This document records starting hypotheses for experiments. Values are not
-benchmark results from this repository.
+A profile is one exact model setup.
 
-## Planning candidates
+Two runs are not the same profile when they use different:
 
-| Candidate | Native context | Initial operating profile |
-|---|---:|---:|
-| Qwen3.6-35B-A3B | 256K | 128K |
-| Qwen3.5-122B-A10B quantised | 256K | 128K |
+- model versions;
+- number compression;
+- server versions;
+- context sizes;
+- cache settings; or
+- generation settings.
 
-Suggested planning context bands:
+Record these details in the profile JSON.
 
-- 32K;
-- 64K;
-- 128K;
-- 192K stress; and
-- 224K boundary.
+## Start with roles, not favourite models
 
-Reserve enough space for model reasoning and output. The complete context
-includes system instructions, tools, source material, reasoning and response.
+Prepare profiles for:
 
-## Coding candidate
+- a local candidate;
+- a strong hosted control;
+- a cheaper hosted control;
+- an independent planning grader; and
+- an optional subscription control.
 
-| Candidate | Native context | Initial operating profile |
-|---|---:|---:|
-| Qwen3-Coder-Next FP8 | 256K | 128K |
+Model names change over time. Check current provider and model documentation
+before filling the profile.
 
-Single-DGX-Spark reports indicate that runtime and attention-backend choices
-can make the practical context limit lower than the model's native limit. Start
-with 128K, measure actual memory headroom, and treat larger profiles as separate
-configurations.
+## Context
 
-Suggested coding context bands:
+Context is the text a model can hold during one request.
+
+Agent work also needs room for:
+
+- system instructions;
+- tool descriptions;
+- previous messages;
+- file contents;
+- tool results; and
+- the model's answer.
+
+A model that says it supports 128K does not leave all 128K for source files.
+
+Start with realistic smaller tasks. Test larger context bands later:
 
 - 32K;
 - 64K;
 - 96K;
-- 128K; and
-- 160K stress if the runtime supports it reliably.
+- 128K;
+- larger stress tests when the server supports them.
 
-## Configuration identity
+Do not fill context with repeated nonsense. Use useful files and realistic
+distractions.
 
-A benchmark model identifier should include:
+## Check the exact setup
 
-```text
-model weights
-quantisation
-serving runtime and version
-attention backend
-maximum model length
-KV-cache type
-prefix-caching setting
-sampling configuration
-```
+Before accepting results, record:
 
-For example:
+- provider;
+- model name;
+- model revision;
+- compression;
+- server name and version;
+- attention backend;
+- context limit;
+- KV-cache settings;
+- prefix caching;
+- temperature and seed, when supported;
+- hardware; and
+- cost currency for billed providers.
 
-```text
-qwen3-coder-next-fp8__vllm-x.y__flashinfer__ctx-131072__prefix-cache
-```
-
-Do not compare results labelled only with a marketing model name.
-
-## Sources to verify during implementation
-
-- Qwen model cards: <https://huggingface.co/Qwen>
-- NVIDIA DGX Spark developer forum:
-  <https://forums.developer.nvidia.com/c/accelerated-computing/dgx-spark-gb10/719>
-- Pi documentation: <https://pi.dev/docs/latest>
-- Inspect AI documentation: <https://inspect.aisi.org.uk/>
-
-Record exact source URLs and access dates beside measured runtime
-configurations when the first benchmark is published.
+If one of these changes, treat the result as a new setup.

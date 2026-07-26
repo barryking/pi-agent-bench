@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pi Agent Bench — Model comparison</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <div class="eyebrow">Comparable-cohort model evaluation</div>
+        <h1>Pi Agent Bench</h1>
+        <p class="subtitle">The main benchmark view is quality against total task time: useful work, delivered sooner.</p>
+      </div>
+      <div class="status" id="status">Loading metrics…</div>
+    </header>
+
+    <section class="panel notice" aria-live="polite">
+      <span class="badge" id="data-badge">CHECKING</span>
+      <span id="data-notice">Assessing benchmark coverage and comparability.</span>
+    </section>
+
+    <section class="panel filters" aria-label="Comparable cohort filters">
+      <label>Phase
+        <select id="phase"></select>
+      </label>
+      <label>Dataset version
+        <select id="dataset"></select>
+      </label>
+      <label>Campaign
+        <select id="campaign"></select>
+      </label>
+      <label>Cache state
+        <select id="cache"></select>
+      </label>
+      <label>Trend metric
+        <select id="metric"></select>
+      </label>
+      <label>Comparison baseline
+        <select id="baseline"></select>
+      </label>
+      <label class="check-label">
+        <input id="common-only" type="checkbox" checked>
+        Common cases only
+      </label>
+    </section>
+
+    <section class="panel chart-panel primary-chart">
+      <div class="chart-head">
+        <h2>Primary view: quality versus total task time</h2>
+        <span>Upper-left is better: higher quality, less time</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="pareto" role="img" aria-label="Quality versus total task time by model profile"></canvas>
+        <div class="tooltip" id="pareto-tip"></div>
+      </div>
+      <div class="legend" id="pareto-legend"></div>
+    </section>
+
+    <section class="panel section">
+      <div class="section-head">
+        <h2>Model comparison</h2>
+        <span id="cohort-label">One phase and dataset version at a time</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Profile</th>
+              <th>Model</th>
+              <th>Type</th>
+              <th>Provider / runtime</th>
+              <th>Coverage</th>
+              <th>Trials / case</th>
+              <th>Rank stability</th>
+              <th>Success</th>
+              <th>Quality</th>
+              <th>Δ quality</th>
+              <th>Median successful time</th>
+              <th>Tokens / success</th>
+              <th>Observed output tok/s</th>
+              <th>Reported cost / success</th>
+              <th>Configuration</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="panel chart-panel">
+        <div class="chart-head">
+          <h2 id="comparison-title">Selected metric</h2>
+          <span>Mean and approximate 95% interval</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="comparison" role="img" aria-label="Selected metric comparison with uncertainty by model profile"></canvas>
+          <div class="tooltip" id="comparison-tip"></div>
+        </div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="chart-head">
+          <h2>Success versus tokens</h2>
+          <span>Upper-left is better</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="token-success" role="img" aria-label="Success rate versus median tokens used by successful tasks"></canvas>
+          <div class="tooltip" id="token-success-tip"></div>
+        </div>
+        <div class="legend" id="token-success-legend"></div>
+      </article>
+    </section>
+
+    <section class="panel section">
+      <div class="section-head">
+        <h2>Case coverage</h2>
+        <span id="coverage-label">Profile × case sample counts</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr id="coverage-head"></tr></thead>
+          <tbody id="coverage-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel trend-panel">
+      <div class="chart-head">
+        <h2>Change over time</h2>
+        <label>Benchmark case
+          <select id="trend-case"></select>
+        </label>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="trend" role="img" aria-label="Selected metric over time for one benchmark case"></canvas>
+        <div class="tooltip" id="trend-tip"></div>
+      </div>
+      <div class="legend" id="trend-legend"></div>
+    </section>
+
+    <section class="panel section">
+      <div class="section-head">
+        <h2>Case-level evidence</h2>
+        <span id="row-count"></span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Profile</th><th>Case</th><th>Trial</th><th>Metric</th><th>Value</th><th>Run</th><th>Benchmark fingerprint</th></tr>
+          </thead>
+          <tbody id="details"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      Missing provider telemetry is shown as unavailable, never as zero. The complete Inspect logs remain the source evidence.
+      <label class="file-button">
+        Load another metrics.jsonl
+        <input id="file" type="file" accept=".jsonl,.ndjson,application/x-ndjson">
+      </label>
+    </footer>
+  </main>
+
+  <script src="/core.js"></script>
+  <script src="/statistics.js"></script>
+  <script src="/charts.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

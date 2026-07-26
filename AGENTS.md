@@ -1,49 +1,53 @@
-# Repository guidance
+# Rules for people and AI helpers
 
-## Goal
+## The goal
 
-Build a reproducible framework for comparing complete planning and coding-agent
-workflows across local and hosted models.
+Build a fair, repeatable way to compare planning and coding agents. The same
+tests must work with local models and cloud models.
 
-## Required context
+## Read these pages first
 
-Before proposing architecture or making substantial changes, read:
+Before changing how the framework works, read:
 
-1. `docs/project-context.md`
+1. `README.md`
 2. `docs/decisions.md`
 3. `docs/architecture.md`
-4. `docs/evaluation-strategy.md`
-5. `docs/implementation-handoff.md`
+4. `docs/scoring-and-extending.md`
+5. `docs/roadmap.md`
 
-Treat those documents as the current project contract. If implementation
-evidence invalidates an assumption, update the relevant document in the same
-change rather than silently diverging from it.
+These pages describe the choices the project has made. If the code proves that
+a choice is wrong, update the page as part of the same change.
 
-## Working rules
+## Rules
 
-- Keep all committed examples synthetic and safe for a public repository.
-- Treat planning and coding as separate evaluation phases.
-- Prefer deterministic verifiers over output similarity or model judging.
-- Run agents only inside an isolated disposable workspace.
-- Record model, quantisation, inference runtime, harness and dataset versions.
-- Do not claim an integration or metric is complete unless it is exercised by
-  an automated test.
-- Keep provider-specific behaviour behind small adapters.
-- Implement the smallest current milestone in `docs/implementation-handoff.md`;
-  do not jump ahead to dashboards or production infrastructure.
+- Only commit examples that are safe to make public.
+- Keep planning tests and coding tests separate.
+- For coding, prefer repeatable tests over asking another model to judge.
+- Run every agent in a new throw-away workspace.
+- Record the model, model version, server, harness, Pi, and dataset versions.
+- Do not say a feature works until an automated test has checked it.
+- Keep special provider behaviour in a small adapter.
+- Keep `docs/roadmap.md` honest when work is completed or added.
 
-## Commands
+## Checks
 
 ```bash
 python -m pip install -e ".[dev]"
+docker compose -f docker/compose.yaml build
+ruff check .
 pytest
-dgx-agent-evals validate evals/planning/sample.jsonl
-dgx-agent-evals validate evals/coding/sample.jsonl
+pi-bench validate evals/planning/sample.jsonl
+pi-bench validate evals/coding/sample.jsonl
+pi-bench versions
 ```
 
-## Definition of done
+`ruff` is installed by `.[dev]`. It checks Python code for common
+mistakes and style problems.
 
-- Tests cover the changed behaviour.
-- Public examples contain no private or company-specific information.
-- Documentation distinguishes measured results from estimates.
-- Benchmark changes remain comparable or explicitly version the dataset.
+## A change is done when
+
+- tests cover the new behaviour;
+- public examples contain no private information;
+- docs say which numbers were measured and which were guessed; and
+- changed cases get a new dataset version when old and new results should not
+  be compared.

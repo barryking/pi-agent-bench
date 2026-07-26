@@ -13,3 +13,7 @@ build/
 logs/
 results/
 workspaces/
+repos/*
+!repos/README.md
+.env.local
+configs/*.local.json

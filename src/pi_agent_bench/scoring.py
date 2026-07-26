@@ -1,4 +1,4 @@
-"""Small deterministic scorers used before semantic or human grading."""
+"""Small deterministic Pi Agent Bench scorers."""
 
 from __future__ import annotations
 

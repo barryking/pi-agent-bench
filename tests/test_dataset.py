@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from dgx_agent_evals.dataset import load_cases
+from pi_agent_bench.dataset import load_cases
 
 
 def write_cases(tmp_path, *cases):
@@ -31,6 +31,17 @@ def test_loads_valid_case(tmp_path):
     assert len(cases) == 1
     assert cases[0].id == "plan-1"
     assert cases[0].expected.required_concepts == ("rollout",)
+    assert cases[0].limits.total_tokens == 4096
+
+
+def test_total_token_budget_is_separate_from_context(tmp_path):
+    case = planning_case()
+    case["limits"]["total_tokens"] = 12000
+
+    loaded = load_cases(write_cases(tmp_path, case))[0]
+
+    assert loaded.limits.context_tokens == 4096
+    assert loaded.limits.total_tokens == 12000
 
 
 def test_rejects_duplicate_ids(tmp_path):

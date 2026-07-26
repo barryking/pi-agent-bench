@@ -1,5 +1,5 @@
-from dgx_agent_evals.dataset import Expected
-from dgx_agent_evals.scoring import score_concepts
+from pi_agent_bench.dataset import Expected
+from pi_agent_bench.scoring import score_concepts
 
 
 def test_scores_required_and_forbidden_concepts():

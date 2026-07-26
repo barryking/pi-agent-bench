@@ -1,4 +1,4 @@
-"""Golden-case loading and validation."""
+"""Pi Agent Bench case loading and validation."""
 
 from __future__ import annotations
 
@@ -11,17 +11,47 @@ Phase = Literal["planning", "coding", "end_to_end"]
 
 
 @dataclass(frozen=True)
+class RubricCriterion:
+    id: str
+    description: str
+    weight: float = 1.0
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> RubricCriterion:
+        criterion_id = _required_string(value, "id")
+        description = _required_string(value, "description")
+        weight = value.get("weight", 1.0)
+        if (
+            not isinstance(weight, (int, float))
+            or isinstance(weight, bool)
+            or weight <= 0
+        ):
+            raise ValueError(f"{criterion_id}: rubric weight must be positive")
+        return cls(id=criterion_id, description=description, weight=float(weight))
+
+
+@dataclass(frozen=True)
 class Limits:
     seconds: int
     turns: int
     context_tokens: int
+    total_tokens: int
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> Limits:
+        context_tokens = _positive_int(value, "context_tokens")
+        total_tokens = value.get("total_tokens", context_tokens)
+        if (
+            not isinstance(total_tokens, int)
+            or isinstance(total_tokens, bool)
+            or total_tokens <= 0
+        ):
+            raise ValueError("total_tokens must be a positive integer")
         limits = cls(
             seconds=_positive_int(value, "seconds"),
             turns=_positive_int(value, "turns"),
-            context_tokens=_positive_int(value, "context_tokens"),
+            context_tokens=context_tokens,
+            total_tokens=total_tokens,
         )
         return limits
 
@@ -31,13 +61,33 @@ class Expected:
     required_concepts: tuple[str, ...] = ()
     forbidden_concepts: tuple[str, ...] = ()
     verifier_command: tuple[str, ...] = ()
+    rubric: tuple[RubricCriterion, ...] = ()
+    success_threshold: float = 1.0
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> Expected:
+        rubric_value = value.get("rubric", [])
+        if not isinstance(rubric_value, list) or not all(
+            isinstance(item, dict) for item in rubric_value
+        ):
+            raise ValueError("rubric must be a list of objects")
+        rubric = tuple(RubricCriterion.from_dict(item) for item in rubric_value)
+        rubric_ids = [criterion.id for criterion in rubric]
+        if len(rubric_ids) != len(set(rubric_ids)):
+            raise ValueError("rubric criterion ids must be unique")
+        success_threshold = value.get("success_threshold", 1.0)
+        if (
+            not isinstance(success_threshold, (int, float))
+            or isinstance(success_threshold, bool)
+            or not 0 < success_threshold <= 1
+        ):
+            raise ValueError("success_threshold must be greater than 0 and at most 1")
         return cls(
             required_concepts=_string_tuple(value.get("required_concepts", [])),
             forbidden_concepts=_string_tuple(value.get("forbidden_concepts", [])),
             verifier_command=_string_tuple(value.get("verifier_command", [])),
+            rubric=rubric,
+            success_threshold=float(success_threshold),
         )
 
 

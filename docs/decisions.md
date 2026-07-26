@@ -1,146 +1,174 @@
-# Decisions and open questions
+# Decisions we have made
 
-This file records current project decisions. Change it when evidence changes a
-decision; do not let implementation silently become the architecture.
+This page records important choices. Change it when the evidence changes.
 
-## Accepted decisions
+## Test the whole agent
 
-### Evaluate complete agent workflows
+We test Pi doing a full task. We do not test only one model answer.
 
-The benchmark evaluates task completion through Pi, not raw model completions.
+Why: tools, files, retries, and the agent loop can change the outcome.
 
-**Reason:** Harness behaviour, tools, context management and recovery materially
-affect real outcomes.
+## Use Inspect AI as the controller
 
-### Use Inspect AI as the initial controller
+Inspect loads cases, starts Docker, applies limits, stores logs, and runs
+scorers.
 
-Inspect AI is the primary framework for datasets, agent execution, sandboxes,
-scoring, limits, logs and analysis.
+Why: using one controller is simpler and makes runs easier to compare.
 
-**Reason:** It supports agent and coding evaluations and provides an agent
-bridge suitable for an OpenAI-compatible CLI harness.
+## Keep Pi as the agent
 
-### Keep Pi as the agent under test
+We run the real Pi tool loop.
 
-The framework invokes the real Pi harness rather than recreating its loop inside
-Inspect.
+Why: replacing Pi with our own small loop would test a different product.
 
-**Reason:** Replacing the harness would answer a different question from the
-developer workflow being considered.
+## Use a clean container for every trial
 
-### Run tasks in disposable environments
+Every trial gets new files, a new Pi home, and a new session.
 
-Coding cases run inside fresh isolated workspaces. Planning cases are read-only
-unless a specific case requires otherwise.
+Why: one trial must not change another trial.
 
-**Reason:** This prevents cross-task contamination and limits the effects of
-model-generated commands.
+## Turn off personal Pi extras
 
-### Start a fresh session for every task
+Skills, extensions, prompt templates, themes, context files, and old sessions
+are disabled.
 
-Planning and coding cases never reuse another case's Pi session.
+Why: a personal extra would make the comparison unfair.
 
-**Reason:** Results must be independent and comparable.
+## Let Inspect control normal model settings
 
-### Separate planning from coding
+For bridge runs, Inspect controls the chosen model and generation settings.
 
-End-to-end cases pass a final frozen planning artifact into a new coding
-session, not the entire planning transcript.
+Why: Pi is pointed at a bridge model name, not the real provider model.
 
-**Reason:** Planning and coding have different context and scoring needs.
+## Support subscription models as a separate route
 
-### Prefer deterministic coding verification
+Pi may call a subscription model directly using one selected login.
 
-Tests and explicit assertions are the primary coding score.
+Why: some useful models are available through subscriptions instead of normal
+API billing.
 
-**Reason:** Reference-patch similarity and model judging can penalise correct
-alternative implementations.
+This route has less Inspect model detail, so we record Pi events too.
 
-### Use independent and calibrated planning grading
+## Treat cloud models as controls
 
-The candidate model does not grade itself. Model grading is calibrated against
-human review.
+Use one strong cloud model and one cheaper cloud model.
 
-**Reason:** Planning quality is semantic, but an uncalibrated judge introduces
-another uncontrolled model dependency.
+Why: cloud models show the quality ceiling and price trade-off. A local model
+does not need to win every measure to be useful.
 
-### Use the same harness for local and hosted controls
+## Keep the framework hardware-neutral
 
-All compared models run through the same Pi version, task, tools and limits.
+The project is called Pi Agent Bench. DGX is one local server choice.
 
-**Reason:** Otherwise the experiment confounds model and harness quality.
+Why: Inspect, Pi, Docker, cases, and reports can work with many model servers.
 
-### Default to a 128K operating profile
+## Use the name Pi Agent Bench
 
-Initial comparisons use 128K before testing larger boundary profiles.
+The final project name is **Pi Agent Bench**.
 
-**Reason:** It covers the expected 20–60K task inputs while leaving meaningful
-room for tools and output, without making maximum-context latency the default.
+Use:
 
-### Keep public and private datasets separate
+- GitHub repository: `pi-agent-bench`;
+- Python package: `pi_agent_bench`;
+- command: `pi-bench`; and
+- Docker image: `pi-agent-bench-sandbox`.
 
-This repository remains public-safe. Protected golden cases live elsewhere.
+Why: it says which agent we test and that this is a benchmark. It does not tie
+the project to DGX or pretend to replace Inspect.
 
-**Reason:** The framework can be reusable without publishing proprietary
-evaluation material.
+## Keep planning and coding separate
 
-## Provisional choices
+Planning and coding use different sessions and different scores.
 
-These should be tested before becoming accepted decisions:
+Why: a long planning conversation should not fill the coding context.
 
-- Qwen3.6-35B-A3B as a fast planner.
-- Qwen3.5-122B-A10B as a stronger planning candidate.
-- Qwen3-Coder-Next FP8 as the first specialist coder.
-- vLLM as the first DGX serving runtime.
-- Prefix caching enabled for production-like coding runs.
-- Three trials per case during exploration.
-- 20–30 planning and 30–50 coding cases before leadership conclusions.
+## Prefer real checks for coding
+
+Hidden tests and required behaviour are the main coding score.
+
+Why: one reference patch is not the only correct solution.
+
+## Use an independent planning grader
+
+The tested model cannot grade itself.
+
+Why: self-grading is not trustworthy.
+
+People must check a hidden sample of the grader's scores.
+
+## Store scores in Inspect first
+
+Inspect stores quality, success, and score parts. The dashboard reads smaller
+copies of those results.
+
+Why: the full Inspect log is the best evidence and can be checked later.
+
+## Keep broken attempts out of rankings
+
+Interrupted runs, run errors, and invalid scores go under `results/_invalid/`.
+
+Why: a system problem is not the same thing as a bad model answer.
+
+## Make new cases safe drafts
+
+Generated cases cannot run. Generated coding verifiers fail.
+
+Why: unfinished work, including AI-written work, must not become ranking
+evidence by mistake.
+
+## Require balanced evidence before ranking
+
+Ranking needs:
+
+- the same shared cases;
+- at least five shared cases;
+- at least three trials per profile and case;
+- matching versions; and
+- matching benchmark files.
+
+Why: a model should not rank higher just because it skipped hard cases.
+
+## Use the same harness for every model
+
+Compared models use the same Pi, tools, cases, limits, and Docker image.
+
+Why: otherwise we cannot tell whether the model caused the difference.
+
+## Start with a 128K model profile
+
+The first broad model profile uses a 128K context where supported.
+
+Why: this leaves room for realistic tasks and agent work without always using
+the largest and slowest setting.
+
+Each case may use a smaller limit.
+
+## Keep public and private cases apart
+
+This repository stays public-safe. Protected cases live elsewhere.
+
+Why: the framework can be shared without sharing private company data.
+
+## Choices still being tested
+
+These are ideas, not final answers:
+
+- which local planning model is best;
+- which local coding model is best;
+- which compression keeps enough quality;
+- whether vLLM is the best server;
+- whether prefix caching should be on;
+- how many trials are enough for close results.
 
 ## Open questions
 
-### Model/runtime
-
-- Which model provides the best planning quality on a single Spark?
-- Is a separate planning and coding model materially better than one resident
-  model, given model-loading time?
-- Which quantisation preserves enough reliability?
-- What vLLM/SGLang/other runtime version is stable on GB10?
-- What context and KV-cache configuration gives the best usable trade-off?
-
-### Harness integration
-
-- Does Pi need a small extension for richer telemetry, or is JSON event mode
-  sufficient?
-- How should Pi's custom provider configuration be injected into each
-  container?
-- Which generation parameters must the Inspect bridge forward?
-- How should prefix-cache hits be correlated with Pi turns?
-
-### Dataset
-
-- Which real completed planning and coding tasks can be converted into private
-  golden cases?
-- How will private task fixtures be versioned without leaking expected outputs?
-- What distribution of task difficulty and context size is representative?
-- How will benchmark contamination be detected?
-
-### Scoring
-
-- Which independent judge model and rubric are sufficiently stable?
-- How many human-reviewed cases are required to calibrate planning scores?
-- How should partial coding success be weighted?
-- Which failure categories need human adjudication?
-
-### Reporting and decision threshold
-
-- What minimum quality relative to the hosted control makes local inference
-  investable?
-- What latency is acceptable for planning versus interactive coding?
-- How should hardware cost, energy, privacy and operational effort be weighted?
-- Should leadership receive one recommendation or a workload-by-workload
-  routing proposal?
-
-### Repository
-
-- Which open-source licence should be selected?
-- Should public benchmark results live in this repository or a separate site?
+- Which local model gives the best useful result?
+- Is one model enough for both planning and coding?
+- Which context size gives the best speed and quality?
+- How closely does the planning grader match people?
+- How many real cases are needed?
+- Which failure groups should the dashboard show?
+- What quality gap is acceptable for private local inference?
+- How should hardware, power, and maintenance cost be counted?
+- Should the final advice choose one model or route different jobs differently?
+- Which open-source licence should this project use?
