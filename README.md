@@ -423,4 +423,4 @@ Do not commit:
 
 ## License
 
-No licence has been chosen yet. Normal copyright rules apply.
+Pi Agent Bench is available under the [MIT License](LICENSE).
