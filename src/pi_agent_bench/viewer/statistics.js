@@ -1,12 +1,147 @@
-    function confidence(values, unit) {
-      const average = mean(values);
-      if (values.length < 2) return { low: average, high: average };
-      const variance = values.reduce((sum, value) => sum + (value - average) ** 2, 0) / (values.length - 1);
-      const margin = 1.96 * Math.sqrt(variance / values.length);
+    function sampleKey(row) {
+      return `${row.run_id}::${row.case_id}::${row.trial_number}`;
+    }
+
+    function successfulMetricValues(rows, metric) {
+      const successfulSamples = new Set(
+        rows
+          .filter(row => row.metric === "quality.success" && row.value === 1)
+          .map(sampleKey)
+      );
+      return rows
+        .filter(row => row.metric === metric && successfulSamples.has(sampleKey(row)))
+        .map(row => row.value);
+    }
+
+    function comparisonReadiness(cases, profiles, cohort, sameCoverage) {
+      const distinct = values => [...new Set(values.filter(
+        value => value !== null && value !== undefined && value !== ""
+      ))];
+      const quality = cohort.filter(row => row.metric === "quality.score");
+      const counts = profiles.flatMap(profile => cases.map(caseId =>
+        quality.filter(row => row.profile === profile && row.case_id === caseId).length
+      ));
+      const minimumTrials = counts.length ? Math.min(...counts) : 0;
+      const missing = [];
+      if (profiles.length < 2) missing.push(`${2 - profiles.length} more setup`);
+      if (cases.length < 5) missing.push(`${5 - cases.length} more shared case`);
+      if (minimumTrials < 3) {
+        missing.push(`${3 - minimumTrials} more trial per setup/case`);
+      }
+      if (!sameCoverage) missing.push("identical case coverage");
+      if (distinct(cohort.map(row => row.benchmark_fingerprint)).length !== 1) {
+        missing.push("one benchmark fingerprint");
+      }
+      if (distinct(cohort.map(row => row.scoring_method)).length !== 1) {
+        missing.push("one scoring method");
+      }
+      [
+        ["framework_version", "one framework version"],
+        ["inspect_version", "one Inspect version"],
+        ["pi_version", "one Pi version"],
+        ["sandbox_image_id", "one sandbox image"]
+      ].forEach(([field, message]) => {
+        if (distinct(cohort.map(row => row[field])).length !== 1) missing.push(message);
+      });
       return {
-        low: unit === "ratio" ? Math.max(0, average - margin) : average - margin,
-        high: unit === "ratio" ? Math.min(1, average + margin) : average + margin
+        ready: missing.length === 0,
+        exploratory: cases.length < 10 || minimumTrials < 5,
+        missing,
+        minimumTrials
       };
+    }
+
+    function wilsonInterval(values, z = 1.96) {
+      if (!values.length) return { low: null, high: null, method: "wilson" };
+      const successes = values.reduce((sum, value) => sum + (value >= 1 ? 1 : 0), 0);
+      const n = values.length;
+      const proportion = successes / n;
+      const denominator = 1 + (z * z) / n;
+      const centre = (proportion + (z * z) / (2 * n)) / denominator;
+      const margin = z * Math.sqrt(
+        (proportion * (1 - proportion) / n) + ((z * z) / (4 * n * n))
+      ) / denominator;
+      return {
+        low: Math.max(0, centre - margin),
+        high: Math.min(1, centre + margin),
+        method: "Wilson"
+      };
+    }
+
+    function caseBootstrapInterval(rows, samples = 2000) {
+      const grouped = new Map();
+      rows.forEach(row => {
+        if (!grouped.has(row.case_id)) grouped.set(row.case_id, []);
+        grouped.get(row.case_id).push(row.value);
+      });
+      const values = [...grouped.values()].map(mean);
+      const average = mean(values);
+      if (values.length < 2) {
+        return { low: average, high: average, method: "case bootstrap" };
+      }
+      const random = seededRandom(values);
+      const estimates = [];
+      for (let sample = 0; sample < samples; sample++) {
+        let total = 0;
+        for (let index = 0; index < values.length; index++) {
+          total += values[Math.floor(random() * values.length)];
+        }
+        estimates.push(total / values.length);
+      }
+      estimates.sort((a, b) => a - b);
+      return {
+        low: percentile(estimates, 0.025),
+        high: percentile(estimates, 0.975),
+        method: "case bootstrap"
+      };
+    }
+
+    function metricInterval(rows, metric) {
+      if (!rows.length) return { low: null, high: null, method: "unavailable" };
+      if (metric === "quality.success") {
+        return wilsonInterval(rows.map(row => row.value));
+      }
+      return caseBootstrapInterval(rows);
+    }
+
+    function matchedQualityDelta(rows, profile, baseline) {
+      if (!baseline || profile === baseline) {
+        return { mean: 0, low: 0, high: 0, matches: 0, method: "baseline" };
+      }
+      const quality = rows.filter(row => row.metric === "quality.score");
+      const key = row => `${row.case_id}::${row.trial_number}`;
+      const baselineValues = new Map(
+        quality.filter(row => row.profile === baseline).map(row => [key(row), row.value])
+      );
+      const differences = quality
+        .filter(row => row.profile === profile && baselineValues.has(key(row)))
+        .map(row => ({
+          case_id: row.case_id,
+          value: row.value - baselineValues.get(key(row))
+        }));
+      if (!differences.length) return null;
+      const interval = caseBootstrapInterval(differences);
+      return {
+        mean: mean(caseMeans(differences)),
+        low: interval.low,
+        high: interval.high,
+        matches: differences.length,
+        method: "case bootstrap over matched repetitions"
+      };
+    }
+
+    function repetitionRanks(rows, selectedProfile) {
+      const quality = metricRows(rows, "quality.score");
+      const repetitions = unique(quality.map(row => row.trial_number));
+      return repetitions.map(repetition => {
+        const ranked = unique(quality.map(row => row.profile)).map(profile => ({
+          profile,
+          quality: macroMean(quality.filter(row =>
+            row.profile === profile && row.trial_number === repetition
+          ))
+        })).sort((a, b) => (b.quality ?? -Infinity) - (a.quality ?? -Infinity));
+        return ranked.findIndex(item => item.profile === selectedProfile) + 1;
+      }).filter(rank => rank > 0);
     }
 
     function caseMeans(rows) {
@@ -18,33 +153,24 @@
       return [...grouped.values()].map(mean);
     }
 
-    function pairedQualityDelta(rows, profile, baseline) {
-      if (!baseline || profile === baseline) return { mean: 0, low: 0, high: 0, pairs: 0 };
-      const quality = metricRows(rows, "quality.score");
-      const key = row => `${row.case_id}::${row.trial_number}`;
-      const baselineValues = new Map(
-        quality.filter(row => row.profile === baseline).map(row => [key(row), row.value])
+    function percentile(sortedValues, probability) {
+      if (!sortedValues.length) return null;
+      const index = Math.min(
+        sortedValues.length - 1,
+        Math.max(0, Math.floor(probability * sortedValues.length))
       );
-      const differences = quality
-        .filter(row => row.profile === profile && baselineValues.has(key(row)))
-        .map(row => row.value - baselineValues.get(key(row)));
-      if (!differences.length) return null;
-      const interval = confidence(differences, "delta");
-      return { mean: mean(differences), ...interval, pairs: differences.length };
+      return sortedValues[index];
     }
 
-    function trialRanks(rows, selectedProfile) {
-      const quality = metricRows(rows, "quality.score");
-      const trials = unique(quality.map(row => row.trial_number));
-      return trials.map(trial => {
-        const ranked = unique(quality.map(row => row.profile)).map(profile => ({
-          profile,
-          quality: macroMean(quality.filter(row =>
-            row.profile === profile && row.trial_number === trial
-          ))
-        })).sort((a, b) => (b.quality ?? -Infinity) - (a.quality ?? -Infinity));
-        return ranked.findIndex(item => item.profile === selectedProfile) + 1;
-      }).filter(rank => rank > 0);
+    function seededRandom(values) {
+      let state = values.reduce(
+        (seed, value, index) => (seed ^ Math.round(value * 1000003) ^ (index * 2654435761)) >>> 0,
+        2166136261
+      );
+      return () => {
+        state = (1664525 * state + 1013904223) >>> 0;
+        return state / 4294967296;
+      };
     }
 
     function compactConfiguration(configurationJson) {
@@ -126,4 +252,19 @@
       return String(value).replace(/[&<>"']/g, character => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
       })[character]);
+    }
+
+    if (typeof module !== "undefined") {
+      module.exports = {
+        caseBootstrapInterval,
+        caseMeans,
+        comparisonReadiness,
+        matchedQualityDelta,
+        mean,
+        metricInterval,
+        percentile,
+        sampleKey,
+        successfulMetricValues,
+        wilsonInterval
+      };
     }

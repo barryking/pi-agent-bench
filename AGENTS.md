@@ -24,7 +24,7 @@ a choice is wrong, update the page as part of the same change.
 ## Rules
 
 - Only commit examples that are safe to make public.
-- Score the finished outcome. Treat planning as optional agent-profile evidence.
+- Score the finished outcome with repeatable evidence.
 - Prefer repeatable tests over asking another model to judge.
 - Run every agent in a new throw-away workspace.
 - Record the model, model version, server, agent profile, harness, Pi, and
@@ -37,18 +37,12 @@ a choice is wrong, update the page as part of the same change.
 
 ```bash
 python -m pip install -e ".[dev]"
-docker compose -f docker/compose.yaml build
-ruff check .
-pytest
-pi-bench validate evals/sample/cases.jsonl
-pi-bench validate evals/starter/cases.jsonl
-pi-bench versions
-python scripts/check-starter-verifiers.py
-python scripts/check-agent-profile-examples.py
+scripts/check-all.sh
 ```
 
-`ruff` is installed by `.[dev]`. It checks Python code for common
-mistakes and style problems.
+This builds and fingerprints the sandbox, runs `ruff` and the Python tests,
+validates both datasets, proves the starter cases and agent-profile examples,
+and tests the dashboard statistics. `ruff` is installed by `.[dev]`.
 
 ## A change is done when
 

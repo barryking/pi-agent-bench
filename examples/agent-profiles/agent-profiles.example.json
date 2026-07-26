@@ -20,25 +20,6 @@
       "prompt_templates": [],
       "mcp_servers": []
     },
-    "example-plan-first": {
-      "description": "Vanilla Pi plus owned plan-first guidance.",
-      "trust_mode": "no-approve",
-      "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
-      "runtime_env": {},
-      "settings": {},
-      "context_files": [
-        {
-          "name": "plan-first",
-          "path": "plan-first/AGENTS.md"
-        }
-      ],
-      "system_prompt": null,
-      "append_system_prompts": [],
-      "skills": [],
-      "extensions": [],
-      "prompt_templates": [],
-      "mcp_servers": []
-    },
     "example-skill": {
       "description": "Vanilla Pi plus one owned test-first skill.",
       "trust_mode": "no-approve",

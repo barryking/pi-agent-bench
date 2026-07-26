@@ -51,7 +51,7 @@ class PiCaseLimits(StoreModel):
 def configure_pi_case() -> Solver:
     """Make sample metadata available to the narrower AgentState interface."""
 
-    async def solve(state: TaskState, generate: Generate) -> TaskState:
+    async def solve(state: TaskState, _generate: Generate) -> TaskState:
         limits = state.metadata.get("limits", {})
         case_limits = store_as(PiCaseLimits)
         case_limits.seconds = int(limits.get("seconds", case_limits.seconds))

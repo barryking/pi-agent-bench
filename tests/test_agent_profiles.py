@@ -183,7 +183,6 @@ def test_owned_agent_profile_examples_are_complete_and_ready():
 
     assert set(profiles) == {
         "example-guidance",
-        "example-plan-first",
         "example-skill",
         "example-extension",
         "example-prompt-template",

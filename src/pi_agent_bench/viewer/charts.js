@@ -103,7 +103,7 @@
       const groups = state.summaries.map(summary => {
         const rows = state.cohort.filter(row => row.profile === summary.profile && row.metric === metric);
         const values = caseMeans(rows);
-        const interval = confidence(values, rows[0]?.unit);
+        const interval = metricInterval(rows, metric);
         return { profile: summary.profile, values, mean: macroMean(rows), interval, unit: rows[0]?.unit };
       }).filter(group => group.mean !== null);
       if (!groups.length) return drawEmpty(chart, "This provider did not report the selected metric.");
@@ -142,7 +142,7 @@
         return { x: x(group.mean), y, group };
       });
       bindTooltip("comparison", "comparison-tip", point =>
-        `<strong>${escapeHtml(point.group.profile)}</strong>${formatMetric(point.group.mean, point.group.unit)} case-balanced mean · ${point.group.values.length} cases`
+        `<strong>${escapeHtml(point.group.profile)}</strong>${formatMetric(point.group.mean, point.group.unit)} case-balanced mean · ${point.group.values.length} cases · ${escapeHtml(point.group.interval.method)} interval`
       );
     }
 
@@ -163,7 +163,7 @@
       }).join("");
       $("coverage-label").textContent = state.sameCoverage
         ? "Identical case coverage across model-and-agent setups"
-        : `${state.commonCases.length} common cases; enable “Common cases only” for a paired comparison`;
+        : `${state.commonCases.length} common cases; enable “Common cases only” for a matched comparison`;
     }
 
     function renderTrend() {

@@ -13,12 +13,8 @@ pi-bench agent-profiles \
   --agent-profiles-file examples/agent-profiles/agent-profiles.example.json
 ```
 
-The file contains focused profiles, including `example-plan-first`, and one
-`example-everything` profile used by the integration check.
-
-`example-plan-first` shows that planning is ordinary profile guidance. It does
-not change the case, create another benchmark phase, or replace the final
-outcome verifier.
+The file contains focused profiles and one `example-everything` profile used
+by the integration check.
 
 ## The common loading path
 
@@ -261,7 +257,7 @@ pi-bench run \
   --agent-profiles-file examples/agent-profiles/agent-profiles.example.json \
   --env-file .env.local \
   --dataset evals/starter/cases.jsonl \
-  --campaign agent-extension-example
+  --run-name agent-extension-example
 ```
 
 The model decides whether the task needs `repository_info`. Use Inspect to
@@ -272,7 +268,7 @@ confirm whether it called the tool.
 Build the pinned image, then run:
 
 ```bash
-docker compose -f docker/compose.yaml build
+pi-bench build-sandbox
 python scripts/check-agent-profile-examples.py
 ```
 

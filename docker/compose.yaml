@@ -1,11 +1,6 @@
 services:
   default:
     image: pi-agent-bench-sandbox:0.6.0
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-      args:
-        PI_VERSION: "0.82.1"
     init: true
     working_dir: /workspace
     security_opt:

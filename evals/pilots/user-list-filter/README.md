@@ -7,7 +7,7 @@ for this change:
 
 - add an optional `activated` filter to the user list;
 - keep the old response when the filter is missing;
-- reject silly page and limit numbers;
+- reject invalid page and limit numbers;
 - add tests; and
 - explain the API in the project README.
 

@@ -20,13 +20,10 @@ python3.11 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e ".[dev]"
 .venv/bin/pi-bench init
-docker compose -f docker/compose.yaml build
-.venv/bin/python scripts/check-starter-verifiers.py
-.venv/bin/ruff check .
-.venv/bin/pytest
+scripts/check-all.sh
 
 echo
 echo "Setup complete."
 echo "1. Edit .env.local and configs/model-baselines.local.json"
 echo "2. Run: .venv/bin/pi-bench doctor --model-profile <name> --model-profiles-file configs/model-baselines.local.json --env-file .env.local"
-echo "3. See: README.md#run-your-first-campaign"
+echo "3. See: README.md#run-your-first-benchmark"

@@ -104,10 +104,9 @@ Paths are read from the folder containing the profile JSON file.
 
 ### Behaviour
 
-There is no special workflow switch. The profile's instructions and resources
-may ask Pi to plan first, write tests first, review its work, use extra tools,
-or follow any other repeatable process. The profile name and content hashes
-record the whole setup.
+The profile's instructions and resources may ask Pi to write tests, review its
+work, use extra tools, or follow any other repeatable process. The profile
+name and content hashes record the whole setup.
 
 ### Tools
 
@@ -226,7 +225,7 @@ server. Put private URLs and tokens in `runtime_env`, not in the profile.
 Use one model and repeat `--agent-profile`:
 
 ```bash
-pi-bench campaign \
+pi-bench benchmark \
   --model-profile hosted-quality \
   --agent-profile vanilla \
   --agent-profile team-agent \
@@ -234,7 +233,7 @@ pi-bench campaign \
   --agent-profiles-file configs/agent-profiles.local.json \
   --env-file .env.local \
   --dataset evals/starter/cases.jsonl \
-  --campaign agent-profile-check-v1 \
+  --run-name agent-profile-check-v1 \
   --epochs 3 \
   --resume
 ```
@@ -265,7 +264,7 @@ Each result saves:
 It does not save resource contents, full paths, or secret values.
 
 If a file changes, its hash changes. Do not mix those runs under the same
-campaign name.
+benchmark run name.
 
 ## Keep the comparison fair
 

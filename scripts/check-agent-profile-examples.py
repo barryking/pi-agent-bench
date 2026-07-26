@@ -17,6 +17,7 @@ from inspect_ai.model import (
 from inspect_ai.tool import ToolCall
 
 from pi_agent_bench.agent_profiles import load_agent_profiles
+from pi_agent_bench.harness_identity import capture_harness_identity
 from pi_agent_bench.inspect_tasks import outcome_tasks
 from pi_agent_bench.model_profiles import ModelProfile
 from pi_agent_bench.reporting import build_report, write_visualizer_exports
@@ -128,8 +129,9 @@ def main() -> int:
                 configuration={"provider": "Inspect scripted model"},
             ),
             agent_profile=agent_profile,
-            campaign="ci",
+            run_name="ci",
             cache_state="cold",
+            harness_identity=capture_harness_identity(ROOT),
         )
         report = build_report(results)
         runs_csv, metrics_jsonl = write_visualizer_exports(results)

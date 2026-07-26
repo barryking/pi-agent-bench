@@ -11,6 +11,11 @@ import urllib.error
 import urllib.request
 
 from .agent_profiles import load_agent_profiles
+from .harness_identity import (
+    build_sandbox,
+    capture_harness_identity,
+    sandbox_identity,
+)
 from .model_profiles import load_env_file, load_profiles, profile_environment
 
 
@@ -51,6 +56,11 @@ def _doctor(profile, agent_profile=None) -> list[str]:
     resolved = _resolved_profile_environment(profile, failures)
     failures.extend(_pi_auth_errors(profile))
     failures.extend(_local_endpoint_errors(profile, resolved))
+    if not failures:
+        try:
+            sandbox_identity()
+        except ValueError as exc:
+            failures.append(str(exc))
     return failures
 
 
@@ -124,14 +134,15 @@ def _run(args: argparse.Namespace) -> None:
     _validate_run_args(args)
     profile = _resolve_model_profile(args)
     agent_profile = _resolve_agent_profile(args)
+    if args.build:
+        host_failures = _host_readiness_errors()
+        if host_failures:
+            raise SystemExit("\n".join(host_failures))
+        build_sandbox()
     failures = _doctor(profile, agent_profile)
     if failures:
         raise SystemExit("\n".join(failures))
-    if args.build:
-        subprocess.run(
-            ["docker", "compose", "-f", "docker/compose.yaml", "build"],
-            check=True,
-        )
+    harness_identity = capture_harness_identity()
 
     from inspect_ai import Epochs, eval_set
     from inspect_ai import eval as inspect_eval
@@ -175,7 +186,7 @@ def _run(args: argparse.Namespace) -> None:
     profile_logs_dir = (
         args.logs_dir
         / _eval_set_id(
-            args.campaign,
+            args.run_name,
             profile.name,
             agent_profile.name,
         )
@@ -195,9 +206,10 @@ def _run(args: argparse.Namespace) -> None:
     eval_metadata = {
         "pi_agent_bench": {
             "profile": profile.public_identity(),
-            "campaign": args.campaign,
+            "run_name": args.run_name,
             "cache_state": args.cache_state,
             "agent_profile": agent_profile.public_identity(),
+            "harness": harness_identity,
         }
     }
     with profile_environment(profile):
@@ -216,7 +228,7 @@ def _run(args: argparse.Namespace) -> None:
                 log_dir=str(profile_logs_dir),
                 retry_attempts=args.retry_attempts,
                 eval_set_id=_eval_set_id(
-                    args.campaign,
+                    args.run_name,
                     profile.name,
                     agent_profile.name,
                 ),
@@ -235,8 +247,9 @@ def _run(args: argparse.Namespace) -> None:
         args.results_dir,
         profile,
         agent_profile=agent_profile,
-        campaign=args.campaign,
+        run_name=args.run_name,
         cache_state=args.cache_state,
+        harness_identity=harness_identity,
     )
     for path in paths:
         print(f"result: {path}")
@@ -256,8 +269,8 @@ def _validate_run_args(args: argparse.Namespace) -> None:
         raise SystemExit("--retry-attempts must be a positive integer")
 
 
-def _eval_set_id(campaign: str, profile: str, agent_profile: str = "vanilla") -> str:
-    parts = [campaign, profile]
+def _eval_set_id(run_name: str, profile: str, agent_profile: str = "vanilla") -> str:
+    parts = [run_name, profile]
     if agent_profile != "vanilla":
         parts.append(agent_profile)
     value = "-".join(parts)
@@ -273,14 +286,14 @@ def _load_full_logs(logs):
     return [log if log.samples is not None else read_eval_log(log.location) for log in logs]
 
 
-def _campaign(args: argparse.Namespace) -> None:
+def _benchmark(args: argparse.Namespace) -> None:
     profiles = list(dict.fromkeys(args.model_profile))
     agent_profiles = list(dict.fromkeys(args.agent_profile or ["vanilla"]))
     combinations = [
         (profile, agent_profile) for profile in profiles for agent_profile in agent_profiles
     ]
     print(
-        f"campaign {args.campaign}: {len(combinations)} model/agent combination(s), "
+        f"benchmark run {args.run_name}: {len(combinations)} model/agent combination(s), "
         f"outcome suite, epochs={args.epochs}"
     )
     for index, (profile_name, agent_profile_name) in enumerate(

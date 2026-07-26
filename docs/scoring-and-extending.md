@@ -74,7 +74,7 @@ A useful case must fail before the work and pass after a known-good solution:
 
 ```bash
 pi-bench validate evals/custom/outcome-example-v1.jsonl
-docker compose -f docker/compose.yaml build
+pi-bench build-sandbox
 
 pi-bench prove-case \
   evals/custom/outcome-example-v1.jsonl \
@@ -99,27 +99,6 @@ Then run:
 ```bash
 pi-bench validate evals/custom/outcome-example-v1.jsonl
 ```
-
-## Planning and other agent behaviours
-
-Do not make a second planning copy of a coding job.
-
-To test plan-first behaviour, create an agent profile with guidance such as:
-
-```markdown
-Read the repository and write a short plan before editing. Then complete the
-change and run the checks.
-```
-
-Run that profile and vanilla Pi against the same outcome cases. Both are judged
-by the same final verifier and total time.
-
-Inspect keeps the plan in the trajectory. You may review or grade that plan as
-optional diagnostic evidence. It must not replace the final outcome score.
-
-If the requested deliverable is itself a plan, design, or report, make that
-artifact the outcome and write a suitable deterministic or human-calibrated
-verifier.
 
 ## Recommended limits
 

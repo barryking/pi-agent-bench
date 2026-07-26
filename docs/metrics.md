@@ -12,7 +12,7 @@ quality versus total task time
 ```
 
 The dashboard shows this first. Upper-left is best: better work in less time.
-It does not mix the two facts into a mystery score.
+Quality and time stay separate so you can see both.
 
 ## Result quality
 
@@ -127,7 +127,7 @@ Local cost needs extra facts, such as:
 ## Evidence files
 
 ```text
-logs/*.eval
+logs/**/*.eval
 ```
 
 These are the full Inspect records. They show the model messages, tool use, and
@@ -181,16 +181,21 @@ The dashboard shows:
 - quality compared with cost;
 - case coverage;
 - changes from a chosen baseline;
-- uncertainty;
-- rank changes across trials; and
+- Wilson intervals for success;
+- case-bootstrap intervals for other metrics;
+- rank ranges across recorded repetitions; and
 - history for one case.
 
-Each score measures one finished outcome. Planning is agent-profile evidence,
-not a separate score that is mixed with the final result.
+Each score measures one finished outcome.
 
 Different dataset versions are never mixed.
 
 Cold and warm cache runs should not be mixed.
+
+Quality changes match the same case and repetition number. They are not called
+paired experiments because each model run happened independently. With fewer
+than ten cases or five trials per setup and case, uncertainty is labelled
+exploratory.
 
 ## Invalid attempts
 

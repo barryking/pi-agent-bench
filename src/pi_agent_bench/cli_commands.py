@@ -122,17 +122,11 @@ def _command_report(args: argparse.Namespace) -> None:
     print(f"metrics: {metrics_jsonl}")
 
 
-def _command_demo(args: argparse.Namespace) -> None:
-    if args.trials < 1:
-        raise SystemExit("--trials must be a positive integer")
-    from .demo_data import generate_demo_results
-    from .reporting import build_report, write_report, write_visualizer_exports
+def _command_build_sandbox(_args: argparse.Namespace) -> None:
+    from .harness_identity import build_sandbox, sandbox_identity
 
-    try:
-        paths = generate_demo_results(args.output_dir, trials=args.trials)
-    except ValueError as exc:
-        raise SystemExit(str(exc)) from exc
-    write_report(build_report(args.output_dir), args.output_dir / "summary.md")
-    write_visualizer_exports(args.output_dir)
-    print(f"demo: {len(paths)} synthetic samples in {args.output_dir}")
-    print(f"view: pi-bench view --results-dir {args.output_dir}")
+    build_sandbox()
+    identity = sandbox_identity()
+    print(f"sandbox: {identity['sandbox_image']}")
+    print(f"image-id: {identity['sandbox_image_id']}")
+    print(f"source-fingerprint: {identity['sandbox_source_fingerprint']}")

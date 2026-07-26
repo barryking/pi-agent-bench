@@ -9,13 +9,13 @@ def test_serves_local_dashboard_and_generated_metrics(tmp_path):
     (tmp_path / "run.json").write_text(
         json.dumps(
             {
-                "schema_version": 3,
+                "schema_version": 4,
                 "run_id": "run-1",
                 "case_id": "case-1",
                 "dataset_version": "1",
                 "started_at": "2026-07-25T12:00:00Z",
                 "trial_number": 1,
-                "campaign": "default",
+                "run_name": "default",
                 "cache_state": "unspecified",
                 "model_configuration": {
                     "profile": "dgx",
@@ -29,7 +29,11 @@ def test_serves_local_dashboard_and_generated_metrics(tmp_path):
                     "configuration_fingerprint": "agent-vanilla",
                 },
                 "inspect_model": "openai/local-model",
-                "harness": {"benchmark_fingerprint": "benchmark-a"},
+                "harness": {
+                    "benchmark_fingerprint": "benchmark-a",
+                    "sandbox_image_id": "sha256:test-image",
+                    "sandbox_source_fingerprint": "sandbox-source-a",
+                },
                 "success": True,
                 "score": {"value": 1.0, "components": {}},
                 "wall_seconds": 10,
@@ -54,6 +58,8 @@ def test_serves_local_dashboard_and_generated_metrics(tmp_path):
             styles = response.read().decode()
         with urllib.request.urlopen(f"{base_url}/charts.js", timeout=5) as response:
             charts = response.read().decode()
+        with urllib.request.urlopen(f"{base_url}/statistics.js", timeout=5) as response:
+            statistics = response.read().decode()
     finally:
         server.shutdown()
         server.server_close()
@@ -69,3 +75,5 @@ def test_serves_local_dashboard_and_generated_metrics(tmp_path):
     assert '"started_at": "2026-07-25T12:00:00Z"' in metrics
     assert "--green" in styles
     assert "renderPareto" in charts
+    assert "wilsonInterval" in statistics
+    assert "caseBootstrapInterval" in statistics

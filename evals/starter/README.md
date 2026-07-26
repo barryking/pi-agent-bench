@@ -32,8 +32,8 @@ pi-bench run \
   --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --dataset evals/starter/cases.jsonl \
-  --campaign starter-outcome-v1
+  --run-name starter-outcome-v1
 ```
 
-Run several models or agent profiles with `pi-bench campaign`. Every setup gets
+Run several models or agent profiles with `pi-bench benchmark`. Every setup gets
 the same starting repositories and final verifiers.
