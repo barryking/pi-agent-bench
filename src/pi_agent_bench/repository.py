@@ -7,7 +7,7 @@ from pathlib import Path
 REQUIRED_PATHS = (
     Path("pyproject.toml"),
     Path("docker/compose.yaml"),
-    Path("evals/schemas/golden-case.schema.json"),
+    Path("evals/schemas/outcome-case.schema.json"),
 )
 
 

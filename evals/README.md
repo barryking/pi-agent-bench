@@ -6,7 +6,7 @@ Each JSONL file contains complete outcome cases.
 sample/cases.jsonl                 two small smoke cases
 starter/cases.jsonl                five owned starter cases
 pilots/<name>/cases.jsonl          larger real-repository cases
-schemas/golden-case.schema.json    case format
+schemas/outcome-case.schema.json   case format
 ```
 
 There is no separate planning dataset. Planning, test-first work, tools,

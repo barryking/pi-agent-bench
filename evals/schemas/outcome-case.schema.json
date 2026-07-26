@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/barryking/pi-agent-bench/evals/schemas/golden-case.schema.json",
-  "title": "Pi Agent Bench Golden Case",
+  "$id": "https://github.com/barryking/pi-agent-bench/evals/schemas/outcome-case.schema.json",
+  "title": "Pi Agent Bench Outcome Case",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "instruction", "limits", "expected", "metadata"],

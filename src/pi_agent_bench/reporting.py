@@ -32,12 +32,9 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
         dataset_version = record.get("dataset_version")
         if not isinstance(dataset_version, str) or not dataset_version:
             raise ValueError("run record is missing dataset_version")
-        campaign = str(record.get("campaign", "legacy"))
-        cache_state = str(record.get("cache_state", "unspecified"))
-        benchmark_fingerprint = str(
-            record.get("harness", {}).get("benchmark_fingerprint")
-            or "legacy-unfingerprinted"
-        )
+        campaign = record["campaign"]
+        cache_state = record["cache_state"]
+        benchmark_fingerprint = record["harness"]["benchmark_fingerprint"]
         grouped[
             (
                 dataset_version,

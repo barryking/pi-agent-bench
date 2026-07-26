@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .case_assets import resolve_starting_repository
 from .inspect_tasks import load_case_suite
 from .repository import REPOSITORY_ROOT
 from .verification import finite_number, verifier_payload
@@ -27,10 +28,8 @@ def prove_outcome_case(
     if len(cases) != 1:
         raise ValueError("case proof needs a dataset containing exactly one outcome case")
     case = cases[0]
-    if case.metadata.get("draft") is True:
-        raise ValueError(f"{case.id}: finish the draft before proving it")
 
-    starting_repository = _resolve_starting_repository(
+    starting_repository = resolve_starting_repository(
         case.metadata.get("starting_repository"), source
     )
     patch_path = Path(known_good_diff).expanduser().resolve()
@@ -151,24 +150,6 @@ def _run_verifier(workspace: Path, command: tuple[str, ...]) -> dict[str, Any]:
     if completed.stderr:
         payload["process_stderr"] = completed.stderr
     return payload
-
-
-def _resolve_starting_repository(value: Any, dataset: Path) -> Path:
-    if not isinstance(value, str) or not value:
-        raise ValueError("outcome case has no starting_repository path")
-    requested = Path(value).expanduser()
-    candidates = (
-        [requested]
-        if requested.is_absolute()
-        else [dataset.parent / requested, REPOSITORY_ROOT / requested]
-    )
-    for candidate in candidates:
-        resolved = candidate.resolve()
-        if resolved.is_dir():
-            return resolved
-    raise ValueError(f"outcome starting_repository does not exist: {candidates[-1].resolve()}")
-
-
 def _quality(payload: dict[str, Any]) -> float | None:
     return finite_number(payload.get("score"))
 

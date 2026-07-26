@@ -1,4 +1,4 @@
-# Repositories used by coding cases
+# Private starting repositories
 
 Put a clean copy of each real coding project in this folder:
 
@@ -34,12 +34,15 @@ The last command prints the exact starting commit. Put it in the case:
     "starting_repository": "local-repos/source-project-name",
     "source_commit": "<full-commit-sha>",
     "dataset_version": "1.0",
+    "score_components": ["requirements"],
+    "draft": true,
     "synthetic": false
   }
 }
 ```
 
 The validator stops if the repository is dirty or is on a different commit.
+Keep `draft` set to `true` until the verifier and case proof are complete.
 
 ## What happens during a run
 

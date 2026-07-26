@@ -69,8 +69,6 @@
     function setData(rows) {
       state.all = rows.map((row, index) => ({
         ...row,
-        campaign: row.campaign || "legacy",
-        cache_state: row.cache_state || "unspecified",
         _index: index,
         _time: row.started_at ? new Date(row.started_at).getTime() : index
       }));
@@ -239,7 +237,6 @@
       const profiles = profileNames.length;
       const trials = unique(state.cohort.map(row => row.run_id)).length;
       const fingerprints = unique(state.cohort.map(row => row.benchmark_fingerprint));
-      const missingFingerprint = state.cohort.some(row => !row.benchmark_fingerprint);
       const synthetic = state.cohort.some(row => row.synthetic === true);
       const readiness = comparisonReadiness(cases, profileNames);
       $("data-badge").textContent = synthetic ? "SYNTHETIC DEMO" : (readiness.ready ? "COMPARABLE" : "INSUFFICIENT EVIDENCE");
@@ -254,8 +251,6 @@
       if (!synthetic && fingerprints.length > 1) {
         $("data-badge").textContent = "MIXED BUILD";
         $("data-notice").textContent += ` ${fingerprints.length} benchmark fingerprints are present; interpret the time trend as a build comparison.`;
-      } else if (missingFingerprint) {
-        $("data-notice").textContent += " Some legacy runs predate benchmark fingerprinting.";
       }
     }
 

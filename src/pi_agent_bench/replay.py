@@ -7,10 +7,10 @@ import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from inspect_ai.log import read_eval_log
 
+from .case_assets import resolve_starting_repository
 from .repository import REPOSITORY_ROOT
 from .verification import finite_number, primary_score, quality_value, verifier_payload
 from .versions import SANDBOX_IMAGE
@@ -46,7 +46,7 @@ def replay_outcome_log(
         final_diff = metadata.get("final_diff")
         if not isinstance(final_diff, str):
             raise ValueError(f"{sample.id}: outcome score has no saved final diff")
-        starting_repository = _resolve_starting_repository(
+        starting_repository = resolve_starting_repository(
             sample.metadata.get("starting_repository"),
             log.eval.metadata.get("dataset_path") if log.eval.metadata else None,
         )
@@ -124,18 +124,3 @@ def replay_outcome_log(
         )
         written.append(path)
     return written
-
-
-def _resolve_starting_repository(value: Any, dataset_path: Any) -> Path:
-    if not isinstance(value, str) or not value:
-        raise ValueError("outcome sample has no starting_repository path")
-    requested = Path(value).expanduser()
-    candidates = [requested] if requested.is_absolute() else []
-    if isinstance(dataset_path, str) and dataset_path:
-        candidates.append(Path(dataset_path).expanduser().resolve().parent / requested)
-    candidates.append(REPOSITORY_ROOT / requested)
-    for candidate in candidates:
-        resolved = candidate.resolve()
-        if resolved.is_dir():
-            return resolved
-    raise ValueError(f"outcome starting_repository does not exist: {candidates[-1].resolve()}")

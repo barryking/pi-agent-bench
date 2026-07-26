@@ -13,7 +13,7 @@ pi-bench new-case \
 This creates:
 
 - the JSONL case;
-- a starting starting repository folder; and
+- a starting repository folder; and
 - a protected verifier that fails until you finish it.
 
 Draft cases cannot run.
@@ -34,7 +34,7 @@ Do not tell the model how the protected verifier works.
 
 ## Build the starting repository
 
-The starting repository is the clean starting repository. It should be:
+The starting repository is the clean code given to the agent. It should be:
 
 - small enough to understand;
 - realistic enough to matter;
@@ -42,7 +42,7 @@ The starting repository is the clean starting repository. It should be:
 - pinned to one version; and
 - unchanged after every run.
 
-Pi Agent Bench copies it into Docker. The original starting repository stays clean.
+Pi Agent Bench copies it into Docker. The original folder stays clean.
 
 ## Build the verifier
 
@@ -73,26 +73,31 @@ Success requires:
 A useful case must fail before the work and pass after a known-good solution:
 
 ```bash
+pi-bench validate evals/custom/outcome-example-v1.jsonl
+docker compose -f docker/compose.yaml build
+
 pi-bench prove-case \
   evals/custom/outcome-example-v1.jsonl \
   --known-good-diff <private-known-good.diff> \
   --output results/case-proofs/outcome-example.json
 ```
 
-Keep private reference solutions outside a public repository.
+You can prove a case while it is still a draft. Keep private reference
+solutions outside a public repository.
 
 ## Finish the draft
 
-Run:
-
-```bash
-pi-bench validate evals/custom/outcome-example-v1.jsonl
-```
-
-When the starting repository, verifier, proof, limits, and instructions are ready, set:
+When the starting repository, verifier, proof, limits, and instructions are
+ready, set:
 
 ```json
 "draft": false
+```
+
+Then run:
+
+```bash
+pi-bench validate evals/custom/outcome-example-v1.jsonl
 ```
 
 ## Planning and other agent behaviours

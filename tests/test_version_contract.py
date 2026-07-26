@@ -181,6 +181,7 @@ def test_result_record_can_be_rebuilt_from_profile_identity(tmp_path):
         "kind": "local",
         "model": "openai/exact-model",
         "configuration": {"runtime": "vllm"},
+        "configuration_fingerprint": "local-vllm",
     }
 
     [record_path] = write_run_records([log], tmp_path, identity)
@@ -199,7 +200,7 @@ def test_result_record_extracts_structured_inspect_score(tmp_path):
         },
         metadata={
             "success_threshold": 0.75,
-            "components": {"legacy": 1.0},
+            "components": {"verifier_metadata": 1.0},
         },
     )
     sample = SimpleNamespace(
@@ -239,7 +240,7 @@ def test_result_record_extracts_structured_inspect_score(tmp_path):
     assert record["success"] is True
     assert record["score"]["components"] == {
         "docs": 0.5,
-        "legacy": 1.0,
+        "verifier_metadata": 1.0,
         "tests": 1.0,
     }
     assert (

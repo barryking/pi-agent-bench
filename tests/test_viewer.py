@@ -9,19 +9,27 @@ def test_serves_local_dashboard_and_generated_metrics(tmp_path):
     (tmp_path / "run.json").write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 3,
                 "run_id": "run-1",
                 "case_id": "case-1",
                 "dataset_version": "1",
                 "started_at": "2026-07-25T12:00:00Z",
                 "trial_number": 1,
+                "campaign": "default",
+                "cache_state": "unspecified",
                 "model_configuration": {
                     "profile": "dgx",
                     "kind": "local",
                     "configuration": {},
+                    "configuration_fingerprint": "model-dgx",
+                },
+                "agent_configuration": {
+                    "profile": "vanilla",
+                    "configuration": {},
+                    "configuration_fingerprint": "agent-vanilla",
                 },
                 "inspect_model": "openai/local-model",
-                "harness": {},
+                "harness": {"benchmark_fingerprint": "benchmark-a"},
                 "success": True,
                 "score": {"value": 1.0, "components": {}},
                 "wall_seconds": 10,

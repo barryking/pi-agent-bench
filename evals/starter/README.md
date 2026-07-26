@@ -8,8 +8,8 @@ This suite has five complete repository jobs:
 - cursor pagination in a Node client; and
 - durable SQLite idempotency.
 
-The starting repositories and verifiers are owned by this project. No outside repository is
-downloaded.
+The starting repositories and verifiers are owned by this project. No outside
+repository is downloaded.
 
 Each case must fail before the requested work and pass after a known-good
 solution. Maintainers check all five with:

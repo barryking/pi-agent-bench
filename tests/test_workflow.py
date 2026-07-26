@@ -1,5 +1,6 @@
 import pytest
 
+from pi_agent_bench import case_proof
 from pi_agent_bench.case_proof import assess_case_proof
 from pi_agent_bench.dataset import load_cases
 from pi_agent_bench.verification import verifier_payload
@@ -109,3 +110,21 @@ def test_case_proof_rejects_missing_critical_component():
 
     assert proof["proved"] is False
     assert proof["after"]["passed_as_expected"] is False
+
+
+def test_draft_case_can_be_proved_before_it_is_enabled(tmp_path, monkeypatch):
+    dataset = tmp_path / "cases.jsonl"
+    scaffold_case("outcome-example", dataset, root=tmp_path)
+    [case] = load_cases(dataset)
+    monkeypatch.setattr(
+        case_proof,
+        "load_case_suite",
+        lambda _dataset: (dataset, [case], "draft-1"),
+    )
+
+    with pytest.raises(ValueError, match="known-good diff does not exist"):
+        case_proof.prove_outcome_case(
+            dataset,
+            tmp_path / "missing.diff",
+            tmp_path / "proof.json",
+        )
