@@ -40,6 +40,13 @@ pi-bench validate evals/planning/sample.jsonl
 pi-bench validate evals/coding/sample.jsonl
 ```
 
+For the five owned starter cases:
+
+```bash
+pi-bench validate evals/starter/planning.jsonl
+pi-bench validate evals/starter/coding.jsonl
+```
+
 For the first real pilot, use:
 
 ```bash
@@ -67,6 +74,7 @@ For coding:
 pi-bench campaign coding \
   --run-profile hosted-quality \
   --run-profile hosted-cost \
+  --dataset evals/starter/coding.jsonl \
   --profiles configs/model-baselines.local.json \
   --env-file .env.local \
   --campaign case-check-v1 \
@@ -92,6 +100,7 @@ Use the same:
 ```bash
 pi-bench campaign coding \
   --run-profile local-candidate \
+  --dataset evals/starter/coding.jsonl \
   --profiles configs/model-baselines.local.json \
   --env-file .env.local \
   --campaign case-check-v1 \
@@ -110,6 +119,7 @@ pi-bench campaign planning \
   --run-profile hosted-quality \
   --run-profile hosted-cost \
   --run-profile local-candidate \
+  --dataset evals/starter/planning.jsonl \
   --grader-profile independent-grader \
   --profiles configs/model-baselines.local.json \
   --env-file .env.local \

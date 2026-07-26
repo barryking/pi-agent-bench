@@ -38,7 +38,10 @@ ruff check .
 pytest
 pi-bench validate evals/planning/sample.jsonl
 pi-bench validate evals/coding/sample.jsonl
+pi-bench validate evals/starter/planning.jsonl
+pi-bench validate evals/starter/coding.jsonl
 pi-bench versions
+python scripts/check-starter-verifiers.py
 ```
 
 `ruff` is installed by `.[dev]`. It checks Python code for common

@@ -22,6 +22,11 @@ def planning_case(case_id="plan-1"):
             "forbidden_concepts": [],
             "verifier_command": [],
         },
+        "metadata": {
+            "dataset_version": "test-1",
+            "draft": False,
+            "synthetic": True,
+        },
     }
 
 
@@ -57,4 +62,12 @@ def test_coding_case_requires_verifier(tmp_path):
     case["expected"]["verifier_command"] = []
 
     with pytest.raises(ValueError, match="coding cases need verifier_command"):
+        load_cases(write_cases(tmp_path, case))
+
+
+def test_schema_rejects_unknown_case_fields(tmp_path):
+    case = planning_case()
+    case["surprise"] = True
+
+    with pytest.raises(ValueError, match="Additional properties"):
         load_cases(write_cases(tmp_path, case))

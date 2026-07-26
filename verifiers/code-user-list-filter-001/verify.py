@@ -157,6 +157,11 @@ def hidden_probe(temporary: Path) -> dict[str, bool]:
 
 
 def changed_evidence() -> tuple[bool, bool]:
+    run(
+        ["git", "-c", "safe.directory=/workspace", "add", "-N", "."],
+        cwd=WORKSPACE,
+        timeout=20,
+    )
     changed = run(
         ["git", "-c", "safe.directory=/workspace", "diff", "--name-only", "HEAD"],
         cwd=WORKSPACE,

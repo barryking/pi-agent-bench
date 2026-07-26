@@ -71,7 +71,7 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
     if not records:
         raise ValueError(f"{source}: no run record JSON files found")
 
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for record in records:
         phase = record.get("phase")
         dataset_version = record.get("dataset_version")
@@ -79,19 +79,54 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
             raise ValueError("run record is missing phase")
         if not isinstance(dataset_version, str) or not dataset_version:
             raise ValueError("run record is missing dataset_version")
-        grouped[(phase, dataset_version)].append(record)
+        campaign = str(record.get("campaign", "legacy"))
+        cache_state = str(record.get("cache_state", "unspecified"))
+        benchmark_fingerprint = str(
+            record.get("harness", {}).get("benchmark_fingerprint")
+            or "legacy-unfingerprinted"
+        )
+        grouped[
+            (
+                phase,
+                dataset_version,
+                campaign,
+                cache_state,
+                benchmark_fingerprint,
+            )
+        ].append(record)
 
     cohorts = {}
-    for (phase, dataset_version), cohort_records in sorted(grouped.items()):
+    for cohort_identity, cohort_records in sorted(grouped.items()):
+        phase, dataset_version, campaign, cache_state, benchmark_fingerprint = (
+            cohort_identity
+        )
         profiles: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for record in cohort_records:
             profile = record.get("model_configuration", {}).get("profile")
             if not isinstance(profile, str) or not profile:
                 raise ValueError("run record is missing model_configuration.profile")
             profiles[profile].append(record)
-        cohorts[f"{phase}@{dataset_version}"] = {
+        for profile, profile_records in profiles.items():
+            fingerprints = {
+                record.get("model_configuration", {}).get("configuration_fingerprint")
+                for record in profile_records
+                if record.get("model_configuration", {}).get("configuration_fingerprint")
+            }
+            if len(fingerprints) > 1:
+                raise ValueError(
+                    f"profile {profile!r} has several configurations in campaign "
+                    f"{campaign!r}; use a new profile name or campaign"
+                )
+        key = (
+            f"{phase}@{dataset_version}::{campaign}::{cache_state}::"
+            f"{benchmark_fingerprint}"
+        )
+        cohorts[key] = {
             "phase": phase,
             "dataset_version": dataset_version,
+            "campaign": campaign,
+            "cache_state": cache_state,
+            "benchmark_fingerprint": benchmark_fingerprint,
             "records": len(cohort_records),
             "profiles": {
                 profile: _profile_summary(profile_records)
@@ -99,7 +134,7 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
             },
         }
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "records": len(records),
         "cohorts": cohorts,
     }
@@ -484,7 +519,10 @@ def _markdown(report: dict[str, Any]) -> str:
     for cohort in report["cohorts"].values():
         lines.extend(
             [
-                f"## {cohort['phase']} — dataset {cohort['dataset_version']}",
+                (
+                    f"## {cohort['phase']} — dataset {cohort['dataset_version']} — "
+                    f"campaign {cohort['campaign']} — {cohort['cache_state']} cache"
+                ),
                 "",
                 (
                     "| Profile | Model | Runs | Success | Mean quality | "

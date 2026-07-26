@@ -54,6 +54,7 @@ def prove_coding_case(
         before,
         after,
         success_threshold=case.expected.success_threshold,
+        required_components=case.expected.required_components,
     )
     record = {
         "schema_version": 1,
@@ -65,6 +66,7 @@ def prove_coding_case(
         "sandbox_image": SANDBOX_IMAGE,
         "verifier_command": list(case.expected.verifier_command),
         "known_good_diff_sha256": hashlib.sha256(patch.encode()).hexdigest(),
+        "required_components": list(case.expected.required_components),
         **proof,
     }
     destination = Path(output).expanduser().resolve()
@@ -86,6 +88,7 @@ def assess_case_proof(
     after: dict[str, Any],
     *,
     success_threshold: float,
+    required_components: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Check the two scores without hiding missing or broken verifier output."""
     before_quality = _quality(before)
@@ -93,11 +96,18 @@ def assess_case_proof(
     before_failed = (
         before_quality is not None and before_quality < success_threshold
     )
+    after_components = after.get("components", {})
+    critical_passed = isinstance(after_components, dict) and all(
+        _component_passed(after_components.get(name)) for name in required_components
+    )
     after_passed = (
-        after_quality is not None and after_quality >= success_threshold
+        after_quality is not None
+        and after_quality >= success_threshold
+        and critical_passed
     )
     return {
         "success_threshold": success_threshold,
+        "required_components": list(required_components),
         "before": {
             "quality": before_quality,
             "failed_as_expected": before_failed,
@@ -161,3 +171,10 @@ def _resolve_fixture(value: Any, dataset: Path) -> Path:
 
 def _quality(payload: dict[str, Any]) -> float | None:
     return finite_number(payload.get("score"))
+
+
+def _component_passed(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    number = finite_number(value)
+    return number is not None and number >= 1.0

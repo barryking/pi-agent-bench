@@ -102,3 +102,15 @@ def test_case_proof_rejects_a_case_that_already_passes():
     )
 
     assert proof["proved"] is False
+
+
+def test_case_proof_rejects_missing_critical_component():
+    proof = assess_case_proof(
+        {"score": 0.2, "components": {"core": 0}},
+        {"score": 0.9, "components": {"core": 0, "docs": 1}},
+        success_threshold=0.8,
+        required_components=("core",),
+    )
+
+    assert proof["proved"] is False
+    assert proof["after"]["passed_as_expected"] is False

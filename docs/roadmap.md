@@ -11,7 +11,7 @@ Checked boxes are done. Empty boxes are still needed.
 - [x] Fake planning and coding examples
 - [x] Clean Docker workspace
 - [x] Real Pi agent inside Docker
-- [ ] Choose an open-source licence
+- [x] Choose the MIT open-source licence
 
 ## Inspect and scoring
 
@@ -43,8 +43,9 @@ Checked boxes are done. Empty boxes are still needed.
 - [x] Add safe case scaffolding
 - [x] Refuse unfinished draft cases
 - [x] Add two real public planning/coding pilot pairs
-- [x] Prove the smaller coding pilot
-- [ ] Build at least five good shared cases
+- [x] Prove all five owned starter coding cases
+- [ ] Re-prove the external user-filter pilot with the current image
+- [x] Build five owned shared starter cases
 - [ ] Build a larger private case set
 - [ ] Add a plan-then-code case type
 

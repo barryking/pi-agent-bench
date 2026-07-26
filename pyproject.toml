@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pi-agent-bench"
-version = "0.3.0"
+version = "0.4.0"
 description = "Evaluate coding-agent workflows across local and hosted language models"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
   "inspect-ai==0.3.249",
+  "jsonschema==4.26.0",
   "openai==2.48.0",
 ]
 
@@ -34,6 +35,7 @@ pi_agent_bench = ["viewer/*.css", "viewer/*.html", "viewer/*.js"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+norecursedirs = ["starter_solutions"]
 
 [tool.ruff]
 line-length = 100

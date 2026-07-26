@@ -7,7 +7,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-Phase = Literal["planning", "coding", "end_to_end"]
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
+
+Phase = Literal["planning", "coding"]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+CASE_SCHEMA = json.loads(
+    (REPOSITORY_ROOT / "evals" / "schemas" / "golden-case.schema.json").read_text(
+        encoding="utf-8"
+    )
+)
+CASE_VALIDATOR = Draft202012Validator(CASE_SCHEMA)
 
 
 @dataclass(frozen=True)
@@ -63,6 +73,7 @@ class Expected:
     verifier_command: tuple[str, ...] = ()
     rubric: tuple[RubricCriterion, ...] = ()
     success_threshold: float = 1.0
+    required_components: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> Expected:
@@ -88,6 +99,7 @@ class Expected:
             verifier_command=_string_tuple(value.get("verifier_command", [])),
             rubric=rubric,
             success_threshold=float(success_threshold),
+            required_components=_string_tuple(value.get("required_components", [])),
         )
 
 
@@ -106,8 +118,8 @@ class GoldenCase:
     def from_dict(cls, value: dict[str, Any]) -> GoldenCase:
         case_id = _required_string(value, "id")
         phase = value.get("phase")
-        if phase not in {"planning", "coding", "end_to_end"}:
-            raise ValueError(f"{case_id}: phase must be planning, coding, or end_to_end")
+        if phase not in {"planning", "coding"}:
+            raise ValueError(f"{case_id}: phase must be planning or coding")
 
         expected = Expected.from_dict(_required_dict(value, "expected"))
         if phase == "planning" and not expected.required_concepts:
@@ -144,6 +156,14 @@ def load_cases(path: str | Path) -> list[GoldenCase]:
                 raise ValueError(f"{source}:{line_number}: invalid JSON: {exc.msg}") from exc
             if not isinstance(payload, dict):
                 raise ValueError(f"{source}:{line_number}: each case must be a JSON object")
+            try:
+                CASE_VALIDATOR.validate(payload)
+            except ValidationError as exc:
+                location = ".".join(str(part) for part in exc.absolute_path)
+                where = f" at {location}" if location else ""
+                raise ValueError(
+                    f"{source}:{line_number}: case schema error{where}: {exc.message}"
+                ) from exc
 
             case = GoldenCase.from_dict(payload)
             if case.id in seen_ids:

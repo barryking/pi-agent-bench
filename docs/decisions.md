@@ -149,6 +149,14 @@ This repository stays public-safe. Protected cases live elsewhere.
 
 Why: the framework can be shared without sharing private company data.
 
+## Own the starter fixtures
+
+The five starter cases use small Python and Node projects owned by Pi Agent
+Bench.
+
+Why: a clean clone can run them without copying an unlicensed or changing
+third-party repository. External and company repositories remain optional.
+
 ## Choices still being tested
 
 These are ideas, not final answers:
@@ -171,4 +179,3 @@ These are ideas, not final answers:
 - What quality gap is acceptable for private local inference?
 - How should hardware, power, and maintenance cost be counted?
 - Should the final advice choose one model or route different jobs differently?
-- Which open-source licence should this project use?

@@ -8,6 +8,10 @@ request. The planning and coding files use the same starting repository.
 Use the smaller `user-list-filter` pilot first. Use this case after the simple
 path works.
 
+It uses the same optional external repository described in
+`evals/pilots/user-list-filter/README.md`. The five owned starter cases need no
+external repository.
+
 Before using the coding case in a comparison, prove it with:
 
 ```bash

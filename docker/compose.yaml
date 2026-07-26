@@ -1,6 +1,6 @@
 services:
   default:
-    image: pi-agent-bench-sandbox:0.3.0
+    image: pi-agent-bench-sandbox:0.4.0
     build:
       context: ..
       dockerfile: docker/Dockerfile

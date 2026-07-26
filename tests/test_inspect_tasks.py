@@ -7,6 +7,7 @@ import pytest
 from pi_agent_bench.inspect_tasks import (
     _validate_git_fixture,
     coding_suite,
+    coding_tasks,
     load_case_suite,
     planning_suite,
     planning_tasks,
@@ -33,6 +34,24 @@ def test_suites_load_multiple_cases_with_docker_sandbox():
     }
 
 
+def test_owned_starter_suite_has_five_planning_and_coding_cases():
+    planning = planning_tasks("evals/starter/planning.jsonl")
+    coding = coding_tasks("evals/starter/coding.jsonl")
+
+    assert sum(len(task.dataset) for task in planning) == 5
+    assert sum(len(task.dataset) for task in coding) == 5
+    assert all(
+        sample.metadata["owned"] is True
+        for task in [*planning, *coding]
+        for sample in task.dataset
+    )
+    assert all(
+        sample.metadata["expected"]["required_components"]
+        for task in coding
+        for sample in task.dataset
+    )
+
+
 def test_suite_rejects_mixed_dataset_versions(tmp_path):
     cases = [
         {
@@ -41,7 +60,11 @@ def test_suite_rejects_mixed_dataset_versions(tmp_path):
             "instruction": "Write a plan.",
             "limits": {"seconds": 60, "turns": 3, "context_tokens": 4096},
             "expected": {"required_concepts": ["rollout"]},
-            "metadata": {"dataset_version": version},
+                "metadata": {
+                    "dataset_version": version,
+                    "draft": False,
+                    "synthetic": True,
+                },
         }
         for index, version in enumerate(("1", "2"), start=1)
     ]
@@ -68,7 +91,11 @@ def test_cli_task_builder_splits_mixed_execution_limits(tmp_path):
                 "total_tokens": tokens,
             },
             "expected": {"required_concepts": ["rollout"]},
-            "metadata": {"dataset_version": "1"},
+                "metadata": {
+                    "dataset_version": "1",
+                    "draft": False,
+                    "synthetic": True,
+                },
         }
         for index, (seconds, turns, tokens) in enumerate(
             ((60, 3, 4096), (120, 5, 8192)),
@@ -106,7 +133,11 @@ def test_draft_case_validates_but_cannot_run(tmp_path):
         "instruction": "Write a plan.",
         "limits": {"seconds": 60, "turns": 3, "context_tokens": 4096},
         "expected": {"required_concepts": ["rollout"]},
-        "metadata": {"dataset_version": "draft-1", "draft": True},
+        "metadata": {
+            "dataset_version": "draft-1",
+            "draft": True,
+            "synthetic": True,
+        },
     }
     path = tmp_path / "planning.jsonl"
     path.write_text(json.dumps(case), encoding="utf-8")
@@ -132,6 +163,8 @@ def test_suite_rejects_missing_coding_fixture(tmp_path):
         "metadata": {
             "dataset_version": "1",
             "fixture": "missing-fixture",
+            "draft": False,
+            "synthetic": True,
         },
     }
     path = tmp_path / "coding.jsonl"

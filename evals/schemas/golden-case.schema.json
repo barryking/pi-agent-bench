@@ -4,7 +4,7 @@
   "title": "Pi Agent Bench Golden Case",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "phase", "instruction", "limits", "expected"],
+  "required": ["id", "phase", "instruction", "limits", "expected", "metadata"],
   "properties": {
     "id": {
       "type": "string",
@@ -12,7 +12,7 @@
       "pattern": "^[a-z0-9][a-z0-9._-]*$"
     },
     "phase": {
-      "enum": ["planning", "coding", "end_to_end"]
+      "enum": ["planning", "coding"]
     },
     "instruction": {
       "type": "string",
@@ -55,8 +55,16 @@
         },
         "verifier_command": {
           "type": "array",
-          "items": {"type": "string", "minLength": 1},
-          "minItems": 1
+          "items": {"type": "string", "minLength": 1}
+        },
+        "required_components": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
+          "uniqueItems": true
         },
         "rubric": {
           "type": "array",
@@ -83,7 +91,13 @@
       }
     },
     "metadata": {
-      "type": "object"
+      "type": "object",
+      "required": ["dataset_version", "draft", "synthetic"],
+      "properties": {
+        "dataset_version": {"type": "string", "minLength": 1},
+        "draft": {"type": "boolean"},
+        "synthetic": {"type": "boolean"}
+      }
     }
   }
 }
