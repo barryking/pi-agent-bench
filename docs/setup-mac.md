@@ -1,7 +1,7 @@
 # Clean Mac setup
 
-Your Mac runs Pi Agent Bench. It starts Docker, sends work to models, checks the
-answers, and stores the results.
+Your Mac runs Pi Agent Bench. It starts Docker, sends work to models, and
+stores the results. The clean Docker container checks each answer.
 
 Pi runs inside Docker. You do not need Pi on the Mac unless you use a Pi
 subscription login.
@@ -120,7 +120,8 @@ pi-bench doctor \
 ```
 
 The command checks Docker, Git, config values, secrets, and local model
-connections.
+connections. It also checks that the Docker image matches the verifier and
+Docker files in this clone. If that check fails, run `pi-bench build-sandbox`.
 
 Fix every message before running a benchmark.
 
@@ -132,7 +133,7 @@ pi-bench run \
   --model-profile hosted-quality \
   --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
-  --campaign first-check
+  --run-name first-check
 ```
 
 Then open both viewers:

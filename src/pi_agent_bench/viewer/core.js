@@ -76,22 +76,22 @@
       const metrics = unique(state.all.map(row => row.metric));
       $("metric").innerHTML = metrics.map(metric => optionHtml(metric, label(metric))).join("");
       $("metric").value = metrics.includes("quality.score") ? "quality.score" : metrics[0];
-      $("status").textContent = `${unique(state.all.map(row => `${row.run_id}:${row.case_id}`)).length} samples loaded`;
+      $("status").textContent = `${unique(state.all.map(sampleKey)).length} samples loaded`;
       render();
     }
 
     function refreshCohortControls() {
       setOptions("dataset", unique(state.all.map(row => row.dataset_version)));
       const versionRows = state.all.filter(row => row.dataset_version === $("dataset").value);
-      setOptions("campaign", unique(versionRows.map(row => row.campaign)), "default");
-      const campaignRows = versionRows.filter(row => row.campaign === $("campaign").value);
-      setOptions("cache", unique(campaignRows.map(row => row.cache_state)), "unspecified");
+      setOptions("run_name", unique(versionRows.map(row => row.run_name)), "default");
+      const runRows = versionRows.filter(row => row.run_name === $("run_name").value);
+      setOptions("cache", unique(runRows.map(row => row.cache_state)), "unspecified");
     }
 
     function render() {
       state.rawCohort = state.all.filter(row =>
         row.dataset_version === $("dataset").value &&
-        row.campaign === $("campaign").value &&
+        row.run_name === $("run_name").value &&
         row.cache_state === $("cache").value
       );
       const profiles = unique(state.rawCohort.map(row => row.profile));
@@ -117,7 +117,12 @@
         : state.rawCohort;
       const cases = unique(state.cohort.map(row => row.case_id));
       setOptions("trend-case", cases, $("trend-case").value);
-      state.rankingReady = comparisonReadiness(cases, profiles).ready;
+      state.rankingReady = comparisonReadiness(
+        cases,
+        profiles,
+        state.cohort,
+        state.sameCoverage
+      ).ready;
       state.summaries = buildSummaries(state.cohort);
       renderNotice(cases, profiles);
       renderLeaderboard();
@@ -128,7 +133,7 @@
       renderCoverage();
       renderDetails();
       $("cohort-label").textContent =
-        `outcomes · dataset ${$("dataset").value} · ${$("campaign").value} · ${$("cache").value} cache`;
+        `outcomes · dataset ${$("dataset").value} · ${$("run_name").value} · ${$("cache").value} cache`;
     }
 
     function buildSummaries(rows) {
@@ -138,15 +143,11 @@
         const profileRows = rows.filter(row => row.profile === profile);
         const success = metricRows(profileRows, "quality.success");
         const quality = metricRows(profileRows, "quality.score");
-        const successfulRuns = new Set(success.filter(row => row.value === 1).map(row => row.run_id));
-        const successfulWall = metricRows(profileRows, "time.wall")
-          .filter(row => successfulRuns.has(row.run_id)).map(row => row.value);
-        const cost = metricRows(profileRows, "cost.provider_reported")
-          .filter(row => successfulRuns.has(row.run_id)).map(row => row.value);
-        const successfulTokens = metricRows(profileRows, "tokens.total")
-          .filter(row => successfulRuns.has(row.run_id)).map(row => row.value);
-        const delta = pairedQualityDelta(rows, profile, baseline);
-        const ranks = trialRanks(rows, profile);
+        const successfulWall = successfulMetricValues(profileRows, "time.wall");
+        const cost = successfulMetricValues(profileRows, "cost.provider_reported");
+        const successfulTokens = successfulMetricValues(profileRows, "tokens.total");
+        const delta = matchedQualityDelta(rows, profile, baseline);
+        const ranks = repetitionRanks(rows, profile);
         const configuration = profileRows.find(row => row.configuration_json)?.configuration_json;
         const agentConfiguration =
           profileRows.find(row => row.agent_configuration_json)?.agent_configuration_json;
@@ -170,7 +171,7 @@
             state.rawCohort.filter(row => row.profile === profile),
             "quality.score"
           ).map(row => row.case_id)).length,
-          samples: unique(quality.map(row => row.run_id)).length,
+          samples: unique(quality.map(sampleKey)).length,
           trialsPerCase: quality.length
             ? quality.length / unique(quality.map(row => row.case_id)).length
             : null,
@@ -213,40 +214,33 @@
       return mean([...cases.values()].map(mean));
     }
 
-    function comparisonReadiness(cases, profiles) {
-      const quality = metricRows(state.cohort, "quality.score");
-      const counts = profiles.flatMap(profile => cases.map(caseId =>
-        quality.filter(row => row.profile === profile && row.case_id === caseId).length
-      ));
-      const minimumTrials = counts.length ? Math.min(...counts) : 0;
-      const missing = [];
-      if (profiles.length < 2) missing.push(`${2 - profiles.length} more setup`);
-      if (cases.length < 5) missing.push(`${5 - cases.length} more shared case`);
-      if (minimumTrials < 3) missing.push(`${3 - minimumTrials} more trial per setup/case`);
-      if (!$("common-only").checked && !state.sameCoverage) missing.push("identical case coverage");
-      if (unique(state.cohort.map(row => row.benchmark_fingerprint)).length > 1) {
-        missing.push("one benchmark fingerprint");
-      }
-      if (unique(state.cohort.map(row => row.scoring_method)).length > 1) {
-        missing.push("one scoring method");
-      }
-      return { ready: missing.length === 0, missing, minimumTrials };
-    }
-
     function renderNotice(cases, profileNames) {
       const profiles = profileNames.length;
-      const trials = unique(state.cohort.map(row => row.run_id)).length;
+      const attempts = unique(
+        metricRows(state.cohort, "quality.score").map(sampleKey)
+      ).length;
       const fingerprints = unique(state.cohort.map(row => row.benchmark_fingerprint));
       const synthetic = state.cohort.some(row => row.synthetic === true);
-      const readiness = comparisonReadiness(cases, profileNames);
-      $("data-badge").textContent = synthetic ? "SYNTHETIC DEMO" : (readiness.ready ? "COMPARABLE" : "INSUFFICIENT EVIDENCE");
+      const readiness = comparisonReadiness(
+        cases,
+        profileNames,
+        state.cohort,
+        state.sameCoverage
+      );
+      $("data-badge").textContent = synthetic
+        ? "SYNTHETIC CASES"
+        : (readiness.ready
+            ? (readiness.exploratory ? "COMPARABLE · EXPLORATORY" : "COMPARABLE")
+            : "INSUFFICIENT EVIDENCE");
       $("data-notice").textContent = synthetic
-        ? `${profiles} illustrative model-and-agent setups across ${cases.length} shared cases and ${trials} samples. Values are generated examples, not benchmark results.`
+        ? `${profiles} setups across ${cases.length} shared example cases and ${attempts} real attempts. These results compare the setups, but example code may not represent your work.`
         : readiness.ready
-          ? `${profiles} setups, ${cases.length} identical cases and at least ${readiness.minimumTrials} trials per setup/case. Ranking is enabled.`
+          ? `${profiles} setups, ${cases.length} identical cases and at least ${readiness.minimumTrials} trials per setup/case. Ranking is enabled.${readiness.exploratory ? " Uncertainty is exploratory until there are at least 10 cases and 5 trials per setup/case." : ""}`
           : `Ranking is disabled: needs ${readiness.missing.join(", ")}.`;
       if (synthetic && !readiness.ready) {
         $("data-notice").textContent += ` Ranking disabled: needs ${readiness.missing.join(", ")}.`;
+      } else if (synthetic && readiness.ready) {
+        $("data-notice").textContent += ` Ranking is enabled.${readiness.exploratory ? " Uncertainty is still exploratory." : ""}`;
       }
       if (!synthetic && fingerprints.length > 1) {
         $("data-badge").textContent = "MIXED BUILD";

@@ -6,9 +6,9 @@ from pi_agent_bench.cli_parser import build_parser
 
 
 def test_report_defaults_to_the_selected_results_directory():
-    args = build_parser().parse_args(["report", "--results-dir", "results/example-campaign"])
+    args = build_parser().parse_args(["report", "--results-dir", "results/example-run"])
 
-    assert args.results_dir == Path("results/example-campaign")
+    assert args.results_dir == Path("results/example-run")
     assert args.output is None
 
 
@@ -16,17 +16,17 @@ def test_cli_exposes_final_command_name():
     assert build_parser().prog == "pi-bench"
 
 
-def test_campaign_can_compare_agent_profiles_with_the_same_model():
+def test_benchmark_can_compare_agent_profiles_with_the_same_model():
     args = build_parser().parse_args(
         [
-            "campaign",
+            "benchmark",
             "--model-profile",
             "local-model",
             "--agent-profile",
             "vanilla",
             "--agent-profile",
             "team-tools",
-            "--campaign",
+            "--run-name",
             "agent-check",
         ]
     )
@@ -64,12 +64,12 @@ def test_old_ambiguous_profile_flags_are_not_supported(old_flag):
     with pytest.raises(SystemExit):
         build_parser().parse_args(
             [
-                "campaign",
+                "benchmark",
                 old_flag,
                 "old-value",
                 "--model-profile",
                 "local-model",
-                "--campaign",
+                "--run-name",
                 "old-flag-check",
             ]
         )
@@ -78,3 +78,9 @@ def test_old_ambiguous_profile_flags_are_not_supported(old_flag):
 def test_old_generic_profiles_command_is_not_supported():
     with pytest.raises(SystemExit):
         build_parser().parse_args(["profiles"])
+
+
+@pytest.mark.parametrize("old_command", ["campaign", "demo-data"])
+def test_removed_commands_are_not_supported(old_command):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args([old_command])

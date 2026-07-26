@@ -88,6 +88,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("versions", help="show pinned framework and harness versions")
+    subparsers.add_parser(
+        "build-sandbox",
+        help="build and fingerprint the protected Docker sandbox",
+    )
 
     doctor = subparsers.add_parser(
         "doctor",
@@ -107,9 +111,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--epochs", type=int, default=1)
     run.add_argument(
-        "--campaign",
+        "--run-name",
         default="default",
-        help="stable label for a comparable benchmark campaign",
+        help="short name for this benchmark run",
     )
     run.add_argument(
         "--cache-state",
@@ -130,61 +134,69 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--resume",
         action="store_true",
-        help="run as an Inspect eval set so an interrupted campaign can resume",
+        help="run as an Inspect eval set so an interrupted benchmark run can resume",
     )
     run.add_argument(
         "--retry-attempts",
         type=int,
         default=1,
-        help="task attempts for --resume campaigns (default: 1)",
+        help="task attempts for --resume benchmark runs (default: 1)",
     )
 
-    campaign = subparsers.add_parser(
-        "campaign",
+    benchmark = subparsers.add_parser(
+        "benchmark",
         help="run the same suite across several model-and-agent setups",
     )
-    campaign.add_argument(
+    benchmark.add_argument(
         "--model-profile",
         action="append",
         required=True,
         help="model profile to run; repeat for each local or hosted model",
     )
-    campaign.add_argument(
+    benchmark.add_argument(
         "--model-profiles-file",
         type=Path,
         default=Path("configs/model-baselines.local.json"),
         help="JSON file containing model profiles",
     )
-    campaign.add_argument(
+    benchmark.add_argument(
         "--agent-profile",
         action="append",
         help=("agent profile to run; repeat to compare several Pi setups (default: vanilla)"),
     )
-    campaign.add_argument(
+    benchmark.add_argument(
         "--agent-profiles-file",
         type=Path,
         default=Path("configs/agent-profiles.json"),
         help="JSON file containing agent profiles",
     )
-    campaign.add_argument("--env-file", type=Path, default=Path(".env.local"))
-    campaign.add_argument("--logs-dir", type=Path, default=Path("logs"))
-    campaign.add_argument("--results-dir", type=Path, default=Path("results"))
-    campaign.add_argument(
+    benchmark.add_argument("--env-file", type=Path, default=Path(".env.local"))
+    benchmark.add_argument("--logs-dir", type=Path, default=Path("logs"))
+    benchmark.add_argument("--results-dir", type=Path, default=Path("results"))
+    benchmark.add_argument(
         "--dataset",
         type=Path,
         default=Path("evals/starter/cases.jsonl"),
     )
-    campaign.add_argument("--epochs", type=int, default=3)
-    campaign.add_argument("--campaign", required=True)
-    campaign.add_argument(
+    benchmark.add_argument("--epochs", type=int, default=3)
+    benchmark.add_argument(
+        "--run-name",
+        required=True,
+        help="short name shared by every setup in this benchmark run",
+    )
+    benchmark.add_argument(
         "--cache-state",
         choices=["unspecified", "cold", "warm"],
         default="unspecified",
     )
-    campaign.add_argument("--cost-limit", type=float)
-    campaign.add_argument("--build", action="store_true")
-    campaign.add_argument("--resume", action="store_true")
-    campaign.add_argument("--retry-attempts", type=int, default=1)
+    benchmark.add_argument("--cost-limit", type=float)
+    benchmark.add_argument(
+        "--build",
+        action="store_true",
+        help="rebuild and fingerprint the sandbox before the first setup",
+    )
+    benchmark.add_argument("--resume", action="store_true")
+    benchmark.add_argument("--retry-attempts", type=int, default=1)
 
     replay = subparsers.add_parser(
         "replay-outcome",
@@ -241,14 +253,4 @@ def build_parser() -> argparse.ArgumentParser:
     view.add_argument("--logs-dir", type=Path, default=Path("logs"))
     view.add_argument("--inspect-port", type=int, default=7575)
 
-    demo = subparsers.add_parser(
-        "demo-data",
-        help="generate a balanced synthetic cohort for dashboard preview",
-    )
-    demo.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("results/demo-comparison"),
-    )
-    demo.add_argument("--trials", type=int, default=3)
     return parser

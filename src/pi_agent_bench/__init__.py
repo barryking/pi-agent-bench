@@ -4,4 +4,6 @@ from .dataset import OutcomeCase, load_cases
 
 __all__ = ["OutcomeCase", "load_cases"]
 
-__version__ = "0.6.0"
+from .versions import FRAMEWORK_VERSION
+
+__version__ = FRAMEWORK_VERSION

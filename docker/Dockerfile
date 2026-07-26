@@ -1,10 +1,11 @@
 FROM node:22.22.0-bookworm-slim
 
-ARG PI_VERSION=0.82.1
+ARG PI_VERSION
+ARG FRAMEWORK_VERSION
 
 LABEL org.opencontainers.image.title="Pi Agent Bench sandbox" \
-      org.opencontainers.image.version="0.6.0" \
-      dev.pi.version="0.82.1"
+      org.opencontainers.image.version="${FRAMEWORK_VERSION}" \
+      dev.pi.version="${PI_VERSION}"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -32,6 +33,9 @@ COPY --chown=root:root verifiers/ /opt/verifiers/
 
 RUN find /opt/verifiers -type d -exec chmod 700 {} + \
     && find /opt/verifiers -type f -exec chmod 700 {} +
+
+ARG BENCHMARK_SOURCE_FINGERPRINT=unknown
+LABEL dev.pi.benchmark-source="${BENCHMARK_SOURCE_FINGERPRINT}"
 
 USER eval
 WORKDIR /workspace

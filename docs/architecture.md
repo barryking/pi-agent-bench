@@ -1,11 +1,7 @@
 # How Pi Agent Bench works
 
-Pi Agent Bench measures a finished repository outcome.
-
-It does not give planning and coding separate rankings. Planning, test-first
-work, review loops, tools, skills, and prompts are parts of an agent profile.
-Every profile starts with the same repository and is checked by the same final
-verifier.
+Pi Agent Bench measures a finished repository outcome. Every profile starts
+with the same repository and is checked by the same final verifier.
 
 ## The parts
 
@@ -35,7 +31,7 @@ One trial works like this:
 2. The starting repository is copied to `/workspace`.
 3. The selected agent profile is copied to Pi's private temporary home.
 4. Pi asks the selected model to complete the task.
-5. Pi may plan, inspect, edit, test, or use extra tools.
+5. Pi inspects, edits, tests, and uses any allowed tools.
 6. The protected verifier checks the final repository.
 7. Inspect saves the full trajectory and score.
 8. Pi Agent Bench exports small result files for comparisons.
@@ -56,10 +52,6 @@ An agent profile is a reproducible Pi setup. It may contain:
 - settings;
 - MCP client extensions and server descriptions.
 
-There is no special “planning profile” switch. To test plan-first behaviour,
-make a normal profile whose instructions ask Pi to plan before editing. The
-profile name and content hashes show exactly what changed.
-
 ## What is scored
 
 The main score is the finished outcome:
@@ -71,14 +63,11 @@ The main score is the finished outcome:
 - critical components; and
 - the case success threshold.
 
-The main chart shows quality against total time. Planning text can be reviewed
-inside the Inspect log, but it does not replace the final outcome score.
-
-If the requested outcome really is a plan or design document, create a case
-whose starting repository, instruction, and verifier check that document. It
-is still one complete outcome.
+The main chart shows quality against total time.
 
 ## Source of truth
 
-Inspect `.eval` files are the source evidence. JSON, CSV, and JSONL files under
+Inspect `.eval` files are the source evidence. Each log keeps the run name,
+repository fingerprint, commit, Docker image ID, and sandbox-source
+fingerprint captured when the run started. JSON, CSV, and JSONL files under
 `results/` are rebuildable chart copies.

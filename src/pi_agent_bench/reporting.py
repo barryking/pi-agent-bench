@@ -8,14 +8,13 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from .report_outputs import (
-    _agent_configuration,
-    _comparison_profile,
-    _load_records,
-    _number,
-    _usage,
-    write_report,
-    write_visualizer_exports,
+from .report_outputs import write_report, write_visualizer_exports
+from .result_records import (
+    agent_configuration,
+    comparison_profile,
+    load_records,
+    number,
+    usage,
 )
 
 __all__ = ["build_report", "write_report", "write_visualizer_exports"]
@@ -23,7 +22,7 @@ __all__ = ["build_report", "write_report", "write_visualizer_exports"]
 
 def build_report(results_dir: str | Path) -> dict[str, Any]:
     source = Path(results_dir)
-    records = _load_records(source)
+    records = load_records(source)
     if not records:
         raise ValueError(f"{source}: no run record JSON files found")
 
@@ -32,13 +31,13 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
         dataset_version = record.get("dataset_version")
         if not isinstance(dataset_version, str) or not dataset_version:
             raise ValueError("run record is missing dataset_version")
-        campaign = record["campaign"]
+        run_name = record["run_name"]
         cache_state = record["cache_state"]
         benchmark_fingerprint = record["harness"]["benchmark_fingerprint"]
         grouped[
             (
                 dataset_version,
-                campaign,
+                run_name,
                 cache_state,
                 benchmark_fingerprint,
             )
@@ -46,10 +45,10 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
 
     cohorts = {}
     for cohort_identity, cohort_records in sorted(grouped.items()):
-        dataset_version, campaign, cache_state, benchmark_fingerprint = cohort_identity
+        dataset_version, run_name, cache_state, benchmark_fingerprint = cohort_identity
         profiles: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for record in cohort_records:
-            profile = _comparison_profile(record)
+            profile = comparison_profile(record)
             if not profile:
                 raise ValueError("run record is missing model_configuration.profile")
             profiles[profile].append(record)
@@ -59,7 +58,7 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
                     record.get("model_configuration", {}).get(
                         "configuration_fingerprint"
                     ),
-                    _agent_configuration(record).get("configuration_fingerprint"),
+                    agent_configuration(record).get("configuration_fingerprint"),
                 )
                 for record in profile_records
                 if record.get("model_configuration", {}).get(
@@ -68,13 +67,13 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
             }
             if len(fingerprints) > 1:
                 raise ValueError(
-                    f"profile {profile!r} has several configurations in campaign "
-                    f"{campaign!r}; use a new profile name or campaign"
+                    f"profile {profile!r} has several configurations in benchmark run "
+                    f"{run_name!r}; use a new profile name or run name"
                 )
-        key = f"{dataset_version}::{campaign}::{cache_state}::{benchmark_fingerprint}"
+        key = f"{dataset_version}::{run_name}::{cache_state}::{benchmark_fingerprint}"
         cohorts[key] = {
             "dataset_version": dataset_version,
-            "campaign": campaign,
+            "run_name": run_name,
             "cache_state": cache_state,
             "benchmark_fingerprint": benchmark_fingerprint,
             "records": len(cohort_records),
@@ -84,7 +83,7 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
             },
         }
     return {
-        "schema_version": 5,
+        "schema_version": 6,
         "records": len(records),
         "cohorts": cohorts,
     }
@@ -97,7 +96,7 @@ def _profile_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         by_case[str(record.get("case_id"))].append(record)
     case_quality = [
         statistics.fmean(
-            _number(record.get("score", {}).get("value")) for record in values
+            number(record.get("score", {}).get("value")) for record in values
         )
         for values in by_case.values()
     ]
@@ -107,17 +106,17 @@ def _profile_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         )
         for values in by_case.values()
     ]
-    wall = [_number(record.get("wall_seconds")) for record in records]
-    successful_wall = [_number(record.get("wall_seconds")) for record in successes]
-    usage = [_usage(record) for record in records]
-    successful_usage = [_usage(record) for record in successes]
+    wall = [number(record.get("wall_seconds")) for record in records]
+    successful_wall = [number(record.get("wall_seconds")) for record in successes]
+    usage_values = [usage(record) for record in records]
+    successful_usage = [usage(record) for record in successes]
     successful_total_tokens = [
         item["input_tokens"] + item["output_tokens"]
         for item in successful_usage
         if item["input_tokens"] is not None and item["output_tokens"] is not None
     ]
     total_cost_values = [
-        item["total_cost"] for item in usage if item["total_cost"] is not None
+        item["total_cost"] for item in usage_values if item["total_cost"] is not None
     ]
     total_cost = sum(total_cost_values) if total_cost_values else None
     return {
@@ -132,8 +131,8 @@ def _profile_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
             None,
         ),
         "model_profile": records[0].get("model_configuration", {}).get("profile"),
-        "agent_profile": _agent_configuration(records[0]).get("profile"),
-        "runs": len(records),
+        "agent_profile": agent_configuration(records[0]).get("profile"),
+        "trials": len(records),
         "cases": len(by_case),
         "successes": len(successes),
         "success_rate": statistics.fmean(case_success),
@@ -143,17 +142,19 @@ def _profile_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
             statistics.median(successful_wall) if successful_wall else None
         ),
         "p95_successful_wall_seconds": _percentile(successful_wall, 0.95),
-        "input_tokens": _sum_available(item["input_tokens"] for item in usage),
+        "input_tokens": _sum_available(item["input_tokens"] for item in usage_values),
         "cache_write_tokens": _sum_available(
-            item["cache_write_tokens"] for item in usage
+            item["cache_write_tokens"] for item in usage_values
         ),
         "cached_input_tokens": _sum_available(
-            item["cached_input_tokens"] for item in usage
+            item["cached_input_tokens"] for item in usage_values
         ),
         "reasoning_tokens": _sum_available(
-            item["reasoning_tokens"] for item in usage
+            item["reasoning_tokens"] for item in usage_values
         ),
-        "output_tokens": _sum_available(item["output_tokens"] for item in usage),
+        "output_tokens": _sum_available(
+            item["output_tokens"] for item in usage_values
+        ),
         "median_tokens_per_success": (
             statistics.median(successful_total_tokens)
             if successful_total_tokens

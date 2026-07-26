@@ -26,8 +26,8 @@
       <label>Dataset version
         <select id="dataset"></select>
       </label>
-      <label>Campaign
-        <select id="campaign"></select>
+      <label>Run name
+        <select id="run_name"></select>
       </label>
       <label>Cache state
         <select id="cache"></select>
@@ -92,7 +92,7 @@
       <article class="panel chart-panel">
         <div class="chart-head">
           <h2 id="comparison-title">Selected metric</h2>
-          <span>Mean and approximate 95% interval</span>
+          <span>Mean with a 95% Wilson or case-bootstrap interval</span>
         </div>
         <div class="canvas-wrap">
           <canvas id="comparison" role="img" aria-label="Selected metric comparison with uncertainty by model and agent setup"></canvas>

@@ -22,13 +22,13 @@ def write_record(
     agent_profile=None,
 ):
     record = {
-        "schema_version": 3,
+        "schema_version": 4,
         "run_id": f"run-{profile}",
         "case_id": "case-1",
         "dataset_version": dataset_version,
         "started_at": "2026-07-25T12:00:00Z",
         "trial_number": 1,
-        "campaign": "default",
+        "run_name": "default",
         "cache_state": "unspecified",
         "model_configuration": {
             "profile": profile,
@@ -47,6 +47,8 @@ def write_record(
             "inspect_version": "0.3.249",
             "pi_version_actual": "0.82.1",
             "benchmark_fingerprint": "benchmark-a",
+            "sandbox_image_id": "sha256:test-image",
+            "sandbox_source_fingerprint": "sandbox-source-a",
         },
         "success": success,
         "score": {
@@ -111,7 +113,8 @@ def test_builds_profile_comparison_report(tmp_path):
     markdown, summary_json = write_report(report, tmp_path / "summary.md")
 
     [cohort] = report["cohorts"].values()
-    assert report["schema_version"] == 5
+    assert report["schema_version"] == 6
+    assert cohort["profiles"]["dgx"]["trials"] == 1
     assert cohort["profiles"]["dgx"]["success_rate"] == 1.0
     assert cohort["profiles"]["dgx"]["provider_reported_total_cost"] is None
     assert cohort["profiles"]["hosted-quality"]["provider_reported_total_cost"] == 0.25
@@ -138,7 +141,7 @@ def test_writes_visualizer_friendly_wide_and_long_exports(tmp_path):
     metrics = [json.loads(line) for line in metrics_path.read_text(encoding="utf-8").splitlines()]
 
     assert rows[0]["profile"] == "dgx"
-    assert rows[0]["record_schema_version"] == "3"
+    assert rows[0]["record_schema_version"] == "4"
     assert rows[0]["started_at"] == "2026-07-25T12:00:00Z"
     assert rows[0]["pi_version"] == "0.82.1"
     assert rows[0]["reasoning_tokens"] == "4"
@@ -157,7 +160,7 @@ def test_writes_visualizer_friendly_wide_and_long_exports(tmp_path):
         "tokens.total",
         "agent.tool_calls",
     }
-    assert {row["schema_version"] for row in metrics} == {3}
+    assert {row["schema_version"] for row in metrics} == {4}
     assert {row["started_at"] for row in metrics} == {"2026-07-25T12:00:00Z"}
 
 
@@ -227,7 +230,7 @@ def test_report_compares_agent_setups_on_the_same_model(tmp_path):
     assert cohort["profiles"]["same-model + team-tools"]["agent_profile"] == "team-tools"
 
 
-def test_report_keeps_campaigns_and_cache_states_separate(tmp_path):
+def test_report_keeps_run_names_and_cache_states_separate(tmp_path):
     first = tmp_path / "first.json"
     second = tmp_path / "second.json"
     write_record(
@@ -251,16 +254,16 @@ def test_report_keeps_campaigns_and_cache_states_separate(tmp_path):
         cost=None,
     )
     first_record = json.loads(first.read_text(encoding="utf-8"))
-    first_record.update({"campaign": "cold-check", "cache_state": "cold"})
+    first_record.update({"run_name": "cold-check", "cache_state": "cold"})
     first.write_text(json.dumps(first_record), encoding="utf-8")
     second_record = json.loads(second.read_text(encoding="utf-8"))
-    second_record.update({"campaign": "warm-check", "cache_state": "warm"})
+    second_record.update({"run_name": "warm-check", "cache_state": "warm"})
     second.write_text(json.dumps(second_record), encoding="utf-8")
 
     report = build_report(tmp_path)
 
     assert len(report["cohorts"]) == 2
-    assert {cohort["campaign"] for cohort in report["cohorts"].values()} == {
+    assert {cohort["run_name"] for cohort in report["cohorts"].values()} == {
         "cold-check",
         "warm-check",
     }
@@ -280,7 +283,7 @@ def test_report_keeps_different_benchmark_builds_separate(tmp_path):
             cost=None,
         )
         record = json.loads(path.read_text(encoding="utf-8"))
-        record["campaign"] = "same-campaign"
+        record["run_name"] = "same-run"
         record["harness"]["benchmark_fingerprint"] = fingerprint
         path.write_text(json.dumps(record), encoding="utf-8")
 

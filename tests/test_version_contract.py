@@ -7,7 +7,7 @@ import pytest
 from inspect_ai.scorer import Score
 
 from pi_agent_bench.model_profiles import ModelProfile
-from pi_agent_bench.run_records import write_run_records
+from pi_agent_bench.run_records import export_inspect_logs, write_run_records
 from pi_agent_bench.versions import (
     FRAMEWORK_VERSION,
     INSPECT_VERSION,
@@ -16,6 +16,19 @@ from pi_agent_bench.versions import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+HARNESS_IDENTITY = {
+    "framework_version": FRAMEWORK_VERSION,
+    "pi_version_expected": PI_VERSION,
+    "inspect_version": INSPECT_VERSION,
+    "repository_commit": "test-commit",
+    "repository_branch": "test-branch",
+    "repository_dirty": False,
+    "benchmark_fingerprint": "test-benchmark",
+    "sandbox_image": SANDBOX_IMAGE,
+    "sandbox_image_id": "sha256:test-image",
+    "sandbox_repo_digests": [],
+    "sandbox_source_fingerprint": "test-sandbox-source",
+}
 
 
 def test_pins_match_package_and_sandbox_contract():
@@ -25,8 +38,11 @@ def test_pins_match_package_and_sandbox_contract():
 
     assert pyproject["project"]["version"] == FRAMEWORK_VERSION
     assert f"inspect-ai=={INSPECT_VERSION}" in pyproject["project"]["dependencies"]
-    assert f"ARG PI_VERSION={PI_VERSION}" in dockerfile
-    assert f'dev.pi.version="{PI_VERSION}"' in dockerfile
+    assert "ARG PI_VERSION" in dockerfile
+    assert 'dev.pi.version="${PI_VERSION}"' in dockerfile
+    assert 'org.opencontainers.image.version="${FRAMEWORK_VERSION}"' in dockerfile
+    assert "ARG BENCHMARK_SOURCE_FINGERPRINT=unknown" in dockerfile
+    assert 'dev.pi.benchmark-source="${BENCHMARK_SOURCE_FINGERPRINT}"' in dockerfile
     assert SANDBOX_IMAGE in compose
 
 
@@ -86,8 +102,9 @@ def test_result_record_contains_actual_harness_and_model_versions(tmp_path):
         [log],
         tmp_path,
         profile,
-        campaign="nightly",
+        run_name="nightly",
         cache_state="warm",
+        harness_identity=HARNESS_IDENTITY,
     )
     record = json.loads(record_path.read_text(encoding="utf-8"))
 
@@ -95,9 +112,11 @@ def test_result_record_contains_actual_harness_and_model_versions(tmp_path):
     assert record["model_configuration"]["configuration"]["weights"] == "model@revision"
     assert record["harness"]["pi_version_actual"] == PI_VERSION
     assert record["harness"]["inspect_version"] == INSPECT_VERSION
-    assert record["campaign"] == "nightly"
+    assert record["run_name"] == "nightly"
     assert record["cache_state"] == "warm"
     assert record["harness"]["benchmark_fingerprint"]
+    assert record["harness"]["repository_commit"] == "test-commit"
+    assert record["harness"]["sandbox_image_id"] == "sha256:test-image"
     assert record["model_configuration"]["configuration_fingerprint"]
     assert record["agent_configuration"]["profile"] == "vanilla"
     assert record["agent_configuration"]["configuration_fingerprint"]
@@ -105,6 +124,72 @@ def test_result_record_contains_actual_harness_and_model_versions(tmp_path):
     assert record["timing"]["model_working_seconds"] == 2.0
     assert record["timing"]["tool_working_seconds"] == 0.5
     assert record["timing"]["observed_output_tokens_per_model_second"] == 4.0
+
+
+def test_export_uses_historical_identity_from_the_inspect_log(tmp_path, monkeypatch):
+    score = Score(value=1.0, metadata={"success_threshold": 1.0})
+    sample = SimpleNamespace(
+        id="historical-case",
+        epoch=1,
+        scores={"quality": score},
+        metadata={},
+        started_at="2026-07-20T00:00:00Z",
+        total_time=1.0,
+        model_usage={},
+        turn_count=1,
+        error=None,
+        events=[],
+        working_time=0.8,
+    )
+    profile = ModelProfile(
+        name="historical-model",
+        kind="hosted",
+        model="openai/historical",
+        runtime_env={},
+        configuration={},
+    )
+    historical = {
+        **HARNESS_IDENTITY,
+        "repository_commit": "commit-from-original-run",
+        "benchmark_fingerprint": "fingerprint-from-original-run",
+        "sandbox_image_id": "sha256:image-from-original-run",
+    }
+    log = SimpleNamespace(
+        status="success",
+        eval=SimpleNamespace(
+            run_id="historical-run",
+            task_version="dataset-1",
+            model="openai/historical",
+            metadata={
+                "pi_agent_bench": {
+                    "profile": profile.public_identity(),
+                    "agent_profile": {
+                        "profile": "vanilla",
+                        "configuration": {},
+                        "configuration_fingerprint": "vanilla",
+                    },
+                    "run_name": "historical-baseline",
+                    "cache_state": "cold",
+                    "harness": historical,
+                }
+            },
+        ),
+        samples=[sample],
+        location="/logs/historical.eval",
+    )
+    monkeypatch.setattr(
+        "inspect_ai.log.list_eval_logs",
+        lambda _logs_dir: [SimpleNamespace(name="/logs/historical.eval")],
+    )
+    monkeypatch.setattr("inspect_ai.log.read_eval_log", lambda _name: log)
+
+    [path] = export_inspect_logs(tmp_path / "logs", tmp_path / "results")
+    record = json.loads(path.read_text(encoding="utf-8"))
+
+    assert record["run_name"] == "historical-baseline"
+    assert record["harness"]["repository_commit"] == "commit-from-original-run"
+    assert record["harness"]["benchmark_fingerprint"] == "fingerprint-from-original-run"
+    assert record["harness"]["sandbox_image_id"] == "sha256:image-from-original-run"
 
 
 def test_result_record_uses_explicit_success_threshold(tmp_path):
@@ -143,7 +228,13 @@ def test_result_record_uses_explicit_success_threshold(tmp_path):
         configuration={},
     )
 
-    [record_path] = write_run_records([log], tmp_path, profile)
+    [record_path] = write_run_records(
+        [log],
+        tmp_path,
+        profile,
+        run_name="default",
+        harness_identity=HARNESS_IDENTITY,
+    )
     record = json.loads(record_path.read_text(encoding="utf-8"))
 
     assert record["success"] is True
@@ -184,7 +275,13 @@ def test_result_record_can_be_rebuilt_from_profile_identity(tmp_path):
         "configuration_fingerprint": "local-vllm",
     }
 
-    [record_path] = write_run_records([log], tmp_path, identity)
+    [record_path] = write_run_records(
+        [log],
+        tmp_path,
+        identity,
+        run_name="default",
+        harness_identity=HARNESS_IDENTITY,
+    )
     record = json.loads(record_path.read_text(encoding="utf-8"))
 
     assert record["model_configuration"] == identity
@@ -232,7 +329,13 @@ def test_result_record_extracts_structured_inspect_score(tmp_path):
         configuration={},
     )
 
-    [record_path] = write_run_records([log], tmp_path, profile)
+    [record_path] = write_run_records(
+        [log],
+        tmp_path,
+        profile,
+        run_name="default",
+        harness_identity=HARNESS_IDENTITY,
+    )
     record = json.loads(record_path.read_text(encoding="utf-8"))
 
     assert record["validity"]["valid"] is True
@@ -270,7 +373,13 @@ def test_incomplete_log_is_recorded_but_excluded_from_rankings(tmp_path):
     )
 
     with pytest.warns(UserWarning, match="excluded incomplete"):
-        paths = write_run_records([log], tmp_path, profile)
+        paths = write_run_records(
+            [log],
+            tmp_path,
+            profile,
+            run_name="default",
+            harness_identity=HARNESS_IDENTITY,
+        )
 
     assert paths == []
     [invalid_path] = list((tmp_path / "_invalid").glob("*.invalid.json"))

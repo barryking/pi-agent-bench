@@ -8,7 +8,7 @@ Checked boxes are done. Empty boxes are still needed.
 - [x] Put pilot files under one clear `evals/pilots/<case>/` layout
 - [x] Remove old duplicate pilot case versions
 - [x] Case file format and checks
-- [x] Fake complete-outcome examples
+- [x] Small sample outcome cases
 - [x] Clean Docker workspace
 - [x] Real Pi agent inside Docker
 - [x] Choose the MIT open-source licence
@@ -21,7 +21,6 @@ Checked boxes are done. Empty boxes are still needed.
 - [x] Keep each case's exact limits
 - [x] Add quality, success, and score parts
 - [x] Add repeated-trial statistics
-- [x] Keep plan evidence in Inspect without giving it a second ranking
 - [x] Replay outcome verification from saved diffs
 - [x] Prove an outcome case fails before and passes after a known-good patch
 
@@ -43,7 +42,7 @@ Checked boxes are done. Empty boxes are still needed.
 - [x] Select tools and Pi settings by profile
 - [x] Pass secret environment values without recording them
 - [x] Support MCP through a selected Pi extension
-- [x] Compare several model-and-agent pairs in one campaign
+- [x] Compare several model-and-agent pairs in one benchmark run
 - [x] Add owned examples for guidance, skills, extensions, prompts, and MCP
 - [x] Prove the owned examples in a real Pi Docker trial
 - [ ] Run a real three-trial agent-profile comparison

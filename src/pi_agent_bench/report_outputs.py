@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .result_records import agent_configuration, comparison_profile, load_records, usage
+
 RUN_COLUMNS = [
     "record_schema_version",
     "synthetic",
@@ -14,7 +16,7 @@ RUN_COLUMNS = [
     "case_id",
     "dataset_version",
     "started_at",
-    "campaign",
+    "run_name",
     "cache_state",
     "trial_number",
     "profile",
@@ -31,6 +33,8 @@ RUN_COLUMNS = [
     "inspect_version",
     "pi_version",
     "sandbox_image",
+    "sandbox_image_id",
+    "sandbox_source_fingerprint",
     "repository_commit",
     "repository_branch",
     "repository_dirty",
@@ -72,7 +76,7 @@ def write_visualizer_exports(
     source = Path(results_dir)
     destination = Path(output_dir) if output_dir else source
     destination.mkdir(parents=True, exist_ok=True)
-    records = _load_records(source)
+    records = load_records(source)
     if not records:
         raise ValueError(f"{source}: no run record JSON files found")
 
@@ -105,65 +109,12 @@ def write_report(
     return markdown_path, json_path
 
 
-def _load_records(source: Path) -> list[dict[str, Any]]:
-    records = []
-    for path in sorted(source.glob("*.json")):
-        if path.name == "summary.json":
-            continue
-        record = json.loads(path.read_text(encoding="utf-8"))
-        if record.get("validity", {}).get("valid") is False:
-            continue
-        _validate_record(record, path)
-        records.append(record)
-    return records
-
-
-def _validate_record(record: dict[str, Any], path: Path) -> None:
-    if record.get("schema_version") != 3:
-        raise ValueError(f"{path}: expected run record schema_version 3")
-    for field in ("run_id", "case_id", "dataset_version", "campaign"):
-        if not isinstance(record.get(field), str) or not record[field]:
-            raise ValueError(f"{path}: run record is missing {field}")
-    if record.get("cache_state") not in {"unspecified", "cold", "warm"}:
-        raise ValueError(f"{path}: cache_state must be unspecified, cold, or warm")
-    for field in ("model_configuration", "agent_configuration"):
-        identity = record.get(field)
-        if not isinstance(identity, dict) or not identity.get("profile"):
-            raise ValueError(f"{path}: run record is missing {field}.profile")
-        if not isinstance(identity.get("configuration"), dict):
-            raise ValueError(f"{path}: run record is missing {field}.configuration")
-        if not identity.get("configuration_fingerprint"):
-            raise ValueError(
-                f"{path}: run record is missing {field}.configuration_fingerprint"
-            )
-    harness = record.get("harness")
-    if not isinstance(harness, dict) or not harness.get("benchmark_fingerprint"):
-        raise ValueError(f"{path}: run record is missing harness.benchmark_fingerprint")
-
-
-def _agent_configuration(record: dict[str, Any]) -> dict[str, Any]:
-    value = record.get("agent_configuration")
-    if not isinstance(value, dict) or not value.get("profile"):
-        raise ValueError("run record is missing agent_configuration.profile")
-    return value
-
-
-def _comparison_profile(record: dict[str, Any]) -> str:
-    model = record.get("model_configuration", {}).get("profile")
-    if not isinstance(model, str) or not model:
-        return ""
-    agent = _agent_configuration(record).get("profile")
-    if not isinstance(agent, str) or not agent or agent == "vanilla":
-        return model
-    return f"{model} + {agent}"
-
-
 def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
     profile = record.get("model_configuration", {})
-    agent_profile = _agent_configuration(record)
+    agent_profile = agent_configuration(record)
     harness = record.get("harness", {})
     agent = record.get("agent", {})
-    usage = _usage(record)
+    usage_values = usage(record)
     artifacts = record.get("artifacts", {})
     timing = record.get("timing", {})
     return {
@@ -173,10 +124,10 @@ def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
         "case_id": record.get("case_id"),
         "dataset_version": record.get("dataset_version"),
         "started_at": record.get("started_at"),
-        "campaign": record["campaign"],
+        "run_name": record["run_name"],
         "cache_state": record["cache_state"],
         "trial_number": record.get("trial_number"),
-        "profile": _comparison_profile(record),
+        "profile": comparison_profile(record),
         "model_profile": profile.get("profile"),
         "agent_profile": agent_profile.get("profile"),
         "profile_kind": profile.get("kind"),
@@ -196,6 +147,8 @@ def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
         "inspect_version": harness.get("inspect_version"),
         "pi_version": harness.get("pi_version_actual"),
         "sandbox_image": harness.get("sandbox_image"),
+        "sandbox_image_id": harness.get("sandbox_image_id"),
+        "sandbox_source_fingerprint": harness.get("sandbox_source_fingerprint"),
         "repository_commit": harness.get("repository_commit"),
         "repository_branch": harness.get("repository_branch"),
         "repository_dirty": harness.get("repository_dirty"),
@@ -209,12 +162,12 @@ def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
         "observed_output_tokens_per_model_second": timing.get(
             "observed_output_tokens_per_model_second"
         ),
-        "input_tokens": usage["input_tokens"],
-        "cache_write_tokens": usage["cache_write_tokens"],
-        "cached_input_tokens": usage["cached_input_tokens"],
-        "reasoning_tokens": usage["reasoning_tokens"],
-        "output_tokens": usage["output_tokens"],
-        "provider_reported_cost": usage["total_cost"],
+        "input_tokens": usage_values["input_tokens"],
+        "cache_write_tokens": usage_values["cache_write_tokens"],
+        "cached_input_tokens": usage_values["cached_input_tokens"],
+        "reasoning_tokens": usage_values["reasoning_tokens"],
+        "output_tokens": usage_values["output_tokens"],
+        "provider_reported_cost": usage_values["total_cost"],
         "cost_currency": profile.get("configuration", {}).get("cost_currency"),
         "pi_wall_seconds": agent.get("wall_seconds"),
         "turns": agent.get("turns"),
@@ -242,13 +195,13 @@ def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
 def _metric_rows(record: dict[str, Any]) -> list[dict[str, Any]]:
     flat = _flat_run(record)
     dimensions = {
-        "schema_version": 3,
+        "schema_version": 4,
         "synthetic": flat["synthetic"],
         "run_id": flat["run_id"],
         "case_id": flat["case_id"],
         "dataset_version": flat["dataset_version"],
         "started_at": flat["started_at"],
-        "campaign": flat["campaign"],
+        "run_name": flat["run_name"],
         "cache_state": flat["cache_state"],
         "trial_number": flat["trial_number"],
         "profile": flat["profile"],
@@ -267,6 +220,8 @@ def _metric_rows(record: dict[str, Any]) -> list[dict[str, Any]]:
         "inspect_version": flat["inspect_version"],
         "pi_version": flat["pi_version"],
         "sandbox_image": flat["sandbox_image"],
+        "sandbox_image_id": flat["sandbox_image_id"],
+        "sandbox_source_fingerprint": flat["sandbox_source_fingerprint"],
         "repository_commit": flat["repository_commit"],
         "repository_branch": flat["repository_branch"],
         "repository_dirty": flat["repository_dirty"],
@@ -339,69 +294,12 @@ def _metric_rows(record: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def _usage(record: dict[str, Any]) -> dict[str, int | float | None]:
-    usage = record.get("usage", {})
-    values = list(usage.values()) if isinstance(usage, dict) else []
-    agent = record.get("agent", {})
-    provider_input = _optional_int_sum(item.get("input_tokens") for item in values)
-    provider_cached = _optional_int_sum(item.get("input_tokens_cache_read") for item in values)
-    provider_output = _optional_int_sum(item.get("output_tokens") for item in values)
-    return {
-        "input_tokens": (
-            provider_input
-            if provider_input is not None
-            else _optional_int(agent.get("input_tokens"))
-        ),
-        "cache_write_tokens": _optional_int_sum(
-            item.get("input_tokens_cache_write") for item in values
-        ),
-        "cached_input_tokens": (
-            provider_cached
-            if provider_cached is not None
-            else _optional_int(agent.get("cached_input_tokens"))
-        ),
-        "reasoning_tokens": _optional_int_sum(item.get("reasoning_tokens") for item in values),
-        "output_tokens": (
-            provider_output
-            if provider_output is not None
-            else _optional_int(agent.get("output_tokens"))
-        ),
-        "total_cost": _optional_sum(item.get("total_cost") for item in values),
-    }
-
-
-def _number(value: Any) -> float:
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
-    return 0.0
-
-
-def _optional_int_sum(values) -> int | None:
-    numbers = [
-        int(value)
-        for value in values
-        if isinstance(value, (int, float)) and not isinstance(value, bool)
-    ]
-    return sum(numbers) if numbers else None
-
-
-def _optional_int(value: Any) -> int | None:
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return int(value)
-    return None
-
-
-def _optional_sum(values) -> float | None:
-    numbers = [_number(value) for value in values if value is not None]
-    return sum(numbers) if numbers else None
-
-
 def _markdown(report: dict[str, Any]) -> str:
     lines = [
         "# Pi Agent Bench comparison",
         "",
         "Generated from complete repository outcomes. Each setup is judged by "
-        "the same final verifier; planning may be part of an agent profile.",
+        "the same final verifier.",
         "",
     ]
     for cohort in report["cohorts"].values():
@@ -409,11 +307,11 @@ def _markdown(report: dict[str, Any]) -> str:
             [
                 (
                     f"## Dataset {cohort['dataset_version']} — "
-                    f"campaign {cohort['campaign']} — {cohort['cache_state']} cache"
+                    f"run {cohort['run_name']} — {cohort['cache_state']} cache"
                 ),
                 "",
                 (
-                    "| Profile | Model | Runs | Success | Mean quality | "
+                    "| Profile | Model | Trials | Success | Mean quality | "
                     "Median successful seconds | p95 successful seconds | "
                     "Median tokens / success | Input / cached / output tokens | "
                     "Reported cost | Cost / success |"
@@ -429,7 +327,7 @@ def _markdown(report: dict[str, Any]) -> str:
                 "{cost_per_success} |".format(
                     profile=profile,
                     model=values["model"],
-                    runs=values["runs"],
+                    runs=values["trials"],
                     success=values["success_rate"],
                     quality=values["mean_quality_score"],
                     median=_format_number(values["median_successful_wall_seconds"]),

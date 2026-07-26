@@ -20,6 +20,8 @@ pi-bench doctor \
 ```
 
 `ready` means the Mac, Docker, model profile, and agent profile can be used.
+If Docker or verifier files changed, run `pi-bench build-sandbox` and check
+again.
 
 ## 3. Check the cases
 
@@ -39,7 +41,7 @@ Each case contains:
 ## 4. Run cloud controls
 
 ```bash
-pi-bench campaign \
+pi-bench benchmark \
   --model-profile openai-codex-gpt-5.6-sol \
   --model-profile openai-codex-gpt-5.6-luna \
   --model-profiles-file configs/model-baselines.local.json \
@@ -47,25 +49,25 @@ pi-bench campaign \
   --agent-profiles-file configs/agent-profiles.local.json \
   --env-file .env.local \
   --dataset evals/starter/cases.jsonl \
-  --campaign starter-outcome-v1 \
+  --run-name starter-outcome-v1 \
   --epochs 3 \
   --resume
 ```
 
 ## 5. Run the local model
 
-Use the same dataset, campaign name, agent profile, limits, Pi version, and
+Use the same dataset, benchmark run name, agent profile, limits, Pi version, and
 container:
 
 ```bash
-pi-bench campaign \
+pi-bench benchmark \
   --model-profile local-candidate \
   --model-profiles-file configs/model-baselines.local.json \
   --agent-profile vanilla \
   --agent-profiles-file configs/agent-profiles.local.json \
   --env-file .env.local \
   --dataset evals/starter/cases.jsonl \
-  --campaign starter-outcome-v1 \
+  --run-name starter-outcome-v1 \
   --epochs 3 \
   --resume
 ```
@@ -75,7 +77,7 @@ pi-bench campaign \
 Keep the model fixed and repeat `--agent-profile`:
 
 ```bash
-pi-bench campaign \
+pi-bench benchmark \
   --model-profile hosted-quality \
   --agent-profile vanilla \
   --agent-profile team-agent \
@@ -83,13 +85,10 @@ pi-bench campaign \
   --agent-profiles-file configs/agent-profiles.local.json \
   --env-file .env.local \
   --dataset evals/starter/cases.jsonl \
-  --campaign agent-profile-v1 \
+  --run-name agent-profile-v1 \
   --epochs 3 \
   --resume
 ```
-
-A plan-first setup is just a normal agent profile whose guidance asks Pi to
-plan. Test-first, review-first, MCP, skills, and tool changes work the same way.
 
 ## 7. View results
 
@@ -101,7 +100,7 @@ pi-bench view \
 ```
 
 The Pi Agent Bench dashboard compares setups. Inspect shows the full messages,
-tool calls, plan text, edits, verifier output, tokens, time, and errors.
+tool calls, edits, verifier output, tokens, time, and errors.
 
 ## 8. Recheck a saved result
 

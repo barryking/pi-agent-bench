@@ -35,8 +35,9 @@ After the work:
   └─ Pi Agent Bench saves small files for charts and comparisons
 ```
 
-The Mac runs the tests and stores the results. A DGX or other model server only
-answers model requests. It does not receive your whole Mac filesystem.
+The Mac starts the benchmark and stores the results. Protected tests run in
+the clean container. A DGX or other model server only answers model requests.
+It does not receive your whole Mac filesystem.
 
 ## Important words
 
@@ -47,7 +48,8 @@ answers model requests. It does not receive your whole Mac filesystem.
 - **Agent profile:** Pi's tools, instructions, skills, extensions, and other
   agent setup.
 - **Trial:** one attempt at one case.
-- **Campaign:** a group of trials that should be compared.
+- **Benchmark run:** a group of trials that should be compared.
+- **Run name:** the short label you choose for one benchmark run.
 - **Inspect log:** the full record of what happened.
 - **Dashboard:** the simple charts made by Pi Agent Bench.
 
@@ -72,8 +74,6 @@ success = yes
 ```
 
 Quality comes from protected checks, such as tests and required behaviour.
-Planning is not scored instead of the finished work. If an agent profile asks
-Pi to plan, that plan remains visible in the Inspect log as optional evidence.
 
 ## Install on a clean Mac
 
@@ -189,7 +189,7 @@ Read [Agent profiles](docs/agent-profiles.md) for a small example.
 The [runnable examples](examples/agent-profiles/README.md) include an owned
 skill, extension tool, prompt template, and MCP client plus server.
 
-## Run your first campaign
+## Run your first benchmark
 
 The owned starter suite has five useful jobs. It is included in the clone, so
 you do not need to download another repository.
@@ -198,13 +198,13 @@ Start with the two subscription cloud controls. This gives you a baseline
 before you test a local model:
 
 ```bash
-pi-bench campaign \
+pi-bench benchmark \
   --model-profile openai-codex-gpt-5.6-sol \
   --model-profile openai-codex-gpt-5.6-luna \
   --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --dataset evals/starter/cases.jsonl \
-  --campaign starter-outcome-baseline-v1 \
+  --run-name starter-outcome-baseline-v1 \
   --epochs 3 \
   --resume
 ```
@@ -215,30 +215,26 @@ a time. `--resume` lets Inspect continue after an interruption.
 Next, run the same cases against the local model:
 
 ```bash
-pi-bench campaign \
+pi-bench benchmark \
   --model-profile local-candidate \
   --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --dataset evals/starter/cases.jsonl \
-  --campaign starter-outcome-baseline-v1 \
+  --run-name starter-outcome-baseline-v1 \
   --epochs 3 \
   --resume
 ```
 
-Keep the case files, Pi version, Docker image, and limits unchanged. This lets
-you compare local results with the cloud baseline.
-
-There is no separate planning phase. A case asks for a finished outcome.
-Planning, test-first work, review loops, and other behaviours belong in the
-agent profile. The final repository is checked in the same way for every
-profile.
+Keep the case files, Pi version, Docker image, and limits unchanged. The
+benchmark records the image ID and refuses a stale image. Rebuild it with
+`pi-bench build-sandbox` after changing Docker or verifier files.
 
 ### Compare two Pi setups
 
 Keep the model fixed and repeat `--agent-profile`:
 
 ```bash
-pi-bench campaign \
+pi-bench benchmark \
   --model-profile hosted-quality \
   --agent-profile vanilla \
   --agent-profile team-agent \
@@ -246,15 +242,14 @@ pi-bench campaign \
   --agent-profiles-file configs/agent-profiles.local.json \
   --env-file .env.local \
   --dataset evals/starter/cases.jsonl \
-  --campaign agent-profile-check-v1 \
+  --run-name agent-profile-check-v1 \
   --epochs 3 \
   --resume
 ```
 
 The dashboard shows `hosted-quality` and
 `hosted-quality + team-agent` as separate choices. This makes changes in tools,
-context, skills, and extensions visible without pretending they are different
-models.
+context, skills, and extensions easy to compare.
 
 ## See the results
 
@@ -308,7 +303,7 @@ run metadata to see the profile, or use the Pi Agent Bench dashboard to see the
 real provider and model name recorded by Pi.
 
 With `--resume`, each model setup has its own folder. The name contains the
-campaign and model profile. For example:
+benchmark run and model profile. For example:
 
 ```bash
 inspect view \
@@ -357,7 +352,7 @@ Use these commands before changing `draft` to `false`:
 
 ```bash
 pi-bench validate evals/custom/outcome-example-v1.jsonl
-docker compose -f docker/compose.yaml build
+pi-bench build-sandbox
 
 pi-bench prove-case \
   evals/custom/outcome-example-v1.jsonl \
@@ -413,7 +408,7 @@ repository.
 
 ## Where files go
 
-- `logs/**/*.eval` — full Inspect records, sometimes inside campaign folders.
+- `logs/**/*.eval` — full Inspect records, sometimes inside benchmark run folders.
 - `results/*.json` — rebuildable chart records for each trial.
 - `results/*.diff` — code changes made by the AI.
 - `results/summary.md` — a readable summary.
@@ -436,7 +431,7 @@ into result records.
 Do not rank models until:
 
 - every model ran the same cases;
-- every model used the same Pi and Docker versions;
+- every model used the same run name, Pi version, and exact Docker image;
 - every case has at least three trials;
 - there are at least five shared cases;
 - cloud models show that the cases are possible.
@@ -452,6 +447,10 @@ The main benchmark view is **quality versus total task time**:
 
 Cost is not part of this main view. It may still be shown when a provider
 reports it.
+
+With fewer than ten cases or five trials per setup and case, the dashboard
+marks uncertainty as exploratory. Success uses a Wilson interval. Other
+metrics use a case-level bootstrap.
 
 ## Keep private things private
 

@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
-import subprocess
 import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from .agent_profiles import AgentProfile, vanilla_agent_profile
+from .harness_identity import validate_harness_identity
 from .model_profiles import ModelProfile
 from .verification import finite_number, primary_score, quality_value
-from .versions import FRAMEWORK_VERSION, INSPECT_VERSION, PI_VERSION, SANDBOX_IMAGE
 
 
 def export_inspect_logs(
@@ -37,11 +35,12 @@ def export_inspect_logs(
             continue
         profile = benchmark.get("profile")
         agent_profile = benchmark.get("agent_profile")
-        campaign = benchmark.get("campaign")
+        run_name = benchmark.get("run_name")
         cache_state = benchmark.get("cache_state")
-        if not isinstance(campaign, str) or not campaign:
+        harness_identity = benchmark.get("harness")
+        if not isinstance(run_name, str) or not run_name:
             warnings.warn(
-                f"skipped Inspect log without a campaign: {info.name}",
+                f"skipped Inspect log without a run name: {info.name}",
                 stacklevel=2,
             )
             continue
@@ -58,8 +57,9 @@ def export_inspect_logs(
                     results_dir,
                     profile,
                     agent_profile=agent_profile,
-                    campaign=campaign,
+                    run_name=run_name,
                     cache_state=cache_state,
+                    harness_identity=harness_identity,
                 )
             )
         except ValueError as exc:
@@ -73,12 +73,13 @@ def write_run_records(
     profile: ModelProfile | dict[str, Any],
     *,
     agent_profile: AgentProfile | dict[str, Any] | None = None,
-    campaign: str = "default",
+    run_name: str,
     cache_state: str = "unspecified",
+    harness_identity: dict[str, Any],
 ) -> list[Path]:
     destination = Path(results_dir)
     destination.mkdir(parents=True, exist_ok=True)
-    repository = _repository_identity()
+    harness = validate_harness_identity(harness_identity)
     profile_identity = _profile_identity(profile)
     agent_identity = _agent_profile_identity(agent_profile)
     written: list[Path] = []
@@ -91,8 +92,9 @@ def write_run_records(
                 profile,
                 agent_profile=agent_identity,
                 reason=f"Inspect log status is {log_status}",
-                campaign=campaign,
+                run_name=run_name,
                 cache_state=cache_state,
+                harness_identity=harness,
             )
             warnings.warn(
                 f"excluded incomplete Inspect log from rankings: {invalid_path}",
@@ -108,8 +110,9 @@ def write_run_records(
                     agent_profile=agent_identity,
                     sample=sample,
                     reason="Inspect sample has an execution error",
-                    campaign=campaign,
+                    run_name=run_name,
                     cache_state=cache_state,
+                    harness_identity=harness,
                 )
                 warnings.warn(
                     f"excluded errored Inspect sample from rankings: {invalid_path}",
@@ -126,8 +129,9 @@ def write_run_records(
                     agent_profile=agent_identity,
                     sample=sample,
                     reason="Inspect sample has no score",
-                    campaign=campaign,
+                    run_name=run_name,
                     cache_state=cache_state,
+                    harness_identity=harness,
                 )
                 warnings.warn(
                     f"excluded unscored Inspect sample from rankings: {invalid_path}",
@@ -152,8 +156,9 @@ def write_run_records(
                     agent_profile=agent_identity,
                     sample=sample,
                     reason="Inspect primary score has no finite quality value",
-                    campaign=campaign,
+                    run_name=run_name,
                     cache_state=cache_state,
+                    harness_identity=harness,
                 )
                 warnings.warn(
                     f"excluded invalid Inspect score from rankings: {invalid_path}",
@@ -167,23 +172,20 @@ def write_run_records(
             )
             timing = _inspect_timing(sample)
             record = {
-                "schema_version": 3,
+                "schema_version": 4,
                 "run_id": log.eval.run_id,
                 "case_id": str(sample.id),
                 "dataset_version": log.eval.task_version,
                 "trial_number": sample.epoch,
-                "campaign": campaign,
+                "synthetic": bool((sample.metadata or {}).get("synthetic", False)),
+                "run_name": run_name,
                 "cache_state": cache_state,
                 "model_configuration": profile_identity,
                 "agent_configuration": agent_identity,
                 "inspect_model": str(log.eval.model),
                 "harness": {
-                    "framework_version": FRAMEWORK_VERSION,
-                    "pi_version_expected": PI_VERSION,
                     "pi_version_actual": score_metadata.get("pi_version"),
-                    "inspect_version": INSPECT_VERSION,
-                    "sandbox_image": SANDBOX_IMAGE,
-                    **repository,
+                    **harness,
                 },
                 "started_at": sample.started_at,
                 "wall_seconds": sample.total_time,
@@ -249,8 +251,9 @@ def _write_invalid_record(
     *,
     agent_profile: AgentProfile | dict[str, Any] | None = None,
     reason: str,
-    campaign: str,
+    run_name: str,
     cache_state: str,
+    harness_identity: dict[str, Any],
     sample: Any | None = None,
 ) -> Path:
     invalid_dir = destination / "_invalid"
@@ -261,15 +264,16 @@ def _write_invalid_record(
     path.write_text(
         json.dumps(
             {
-                "schema_version": 3,
+                "schema_version": 4,
                 "run_id": log.eval.run_id,
                 "case_id": sample_id if sample is not None else None,
                 "trial_number": epoch if sample is not None else None,
-                "campaign": campaign,
+                "run_name": run_name,
                 "cache_state": cache_state,
                 "model_configuration": _profile_identity(profile),
                 "agent_configuration": _agent_profile_identity(agent_profile),
                 "inspect_model": str(log.eval.model),
+                "harness": harness_identity,
                 "validity": {
                     "valid": False,
                     "reason": reason,
@@ -378,43 +382,6 @@ def _agent_profile_identity(
     if not isinstance(profile, dict) or not required.issubset(profile):
         raise ValueError("Inspect log has no complete agent profile identity")
     return dict(profile)
-
-
-def _repository_identity() -> dict[str, Any]:
-    root = Path(__file__).resolve().parents[2]
-
-    def git(*args: str) -> str:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-        return result.stdout.strip() if result.returncode == 0 else ""
-
-    paths = [
-        Path(line)
-        for line in git("ls-files", "--cached", "--others", "--exclude-standard").splitlines()
-        if line
-    ]
-    fingerprint = hashlib.sha256()
-    for relative in sorted(paths):
-        path = root / relative
-        if not path.is_file():
-            continue
-        fingerprint.update(str(relative).encode())
-        fingerprint.update(b"\0")
-        fingerprint.update(path.read_bytes())
-        fingerprint.update(b"\0")
-    status = git("status", "--porcelain=v1")
-    return {
-        "repository_commit": git("rev-parse", "HEAD") or None,
-        "repository_branch": git("branch", "--show-current") or None,
-        "repository_dirty": bool(status),
-        "benchmark_fingerprint": fingerprint.hexdigest(),
-    }
 
 
 def _is_success(value: Any, threshold: Any = 1.0) -> bool:

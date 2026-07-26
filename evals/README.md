@@ -9,9 +9,7 @@ pilots/<name>/cases.jsonl          larger real-repository cases
 schemas/outcome-case.schema.json   case format
 ```
 
-There is no separate planning dataset. Planning, test-first work, tools,
-skills, and review instructions belong to the selected agent profile. Every
-profile is judged by the same final outcome verifier.
+Every profile is judged by the same final outcome verifier.
 
 Each case points to:
 

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .cli_commands import (
     _command_agent_profiles,
-    _command_demo,
+    _command_build_sandbox,
     _command_export,
     _command_init,
     _command_model_profiles,
@@ -23,7 +23,7 @@ from .cli_commands import (
     _command_versions,
 )
 from .cli_execution import (
-    _campaign,
+    _benchmark,
     _doctor,
     _resolve_agent_profile,
     _resolve_model_profile,
@@ -41,15 +41,15 @@ def main() -> None:
         "model-profiles": _command_model_profiles,
         "agent-profiles": _command_agent_profiles,
         "versions": _command_versions,
+        "build-sandbox": _command_build_sandbox,
         "doctor": _command_doctor,
         "run": _run,
-        "campaign": _campaign,
+        "benchmark": _benchmark,
         "replay-outcome": _command_replay,
         "prove-case": _command_prove,
         "export": _command_export,
         "report": _command_report,
         "view": _command_view,
-        "demo-data": _command_demo,
     }
     handlers[args.command](args)
 

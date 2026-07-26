@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Literal
 
 TrustMode = Literal["approve", "no-approve"]
@@ -26,16 +23,6 @@ class PiRunConfig:
     extensions_enabled: bool = False
     prompt_templates_enabled: bool = False
     thinking_level: str | None = None
-
-
-@dataclass(frozen=True)
-class PiRunResult:
-    command: tuple[str, ...]
-    return_code: int
-    wall_seconds: float
-    events: tuple[dict[str, Any], ...]
-    non_json_lines: tuple[str, ...]
-    stderr: str
 
 
 @dataclass(frozen=True)
@@ -166,36 +153,6 @@ def summarise_events(events: tuple[dict[str, Any], ...]) -> PiEventSummary:
         input_tokens=input_tokens,
         cached_input_tokens=cached_input_tokens,
         output_tokens=output_tokens,
-    )
-
-
-def run_pi(config: PiRunConfig, prompt: str, workspace: str | Path) -> PiRunResult:
-    """Execute Pi.
-
-    The caller is responsible for providing a disposable, appropriately
-    sandboxed workspace. This function does not weaken process isolation.
-    """
-    command = build_command(config, prompt)
-    started = time.perf_counter()
-    completed = subprocess.run(
-        command,
-        cwd=Path(workspace),
-        text=True,
-        capture_output=True,
-        timeout=config.timeout_seconds,
-        check=False,
-    )
-    wall_seconds = time.perf_counter() - started
-
-    events, non_json_lines = parse_json_events(completed.stdout)
-
-    return PiRunResult(
-        command=command,
-        return_code=completed.returncode,
-        wall_seconds=wall_seconds,
-        events=events,
-        non_json_lines=non_json_lines,
-        stderr=completed.stderr,
     )
 
 
