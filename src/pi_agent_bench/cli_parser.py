@@ -62,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     new_case.add_argument("--dataset", type=Path, required=True)
     new_case.add_argument("--dataset-version", default="draft-1")
 
-    validate = subparsers.add_parser("validate", help="validate a golden JSONL dataset")
+    validate = subparsers.add_parser("validate", help="validate an outcome-case JSONL dataset")
     validate.add_argument("dataset", type=Path)
 
     model_profiles = subparsers.add_parser(

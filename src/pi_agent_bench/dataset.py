@@ -13,7 +13,7 @@ from jsonschema.exceptions import ValidationError
 from .repository import REPOSITORY_ROOT
 
 CASE_SCHEMA = json.loads(
-    (REPOSITORY_ROOT / "evals" / "schemas" / "golden-case.schema.json").read_text(
+    (REPOSITORY_ROOT / "evals" / "schemas" / "outcome-case.schema.json").read_text(
         encoding="utf-8"
     )
 )
@@ -65,7 +65,7 @@ class Expected:
 
 
 @dataclass(frozen=True)
-class GoldenCase:
+class OutcomeCase:
     id: str
     instruction: str
     limits: Limits
@@ -74,7 +74,7 @@ class GoldenCase:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> GoldenCase:
+    def from_dict(cls, value: dict[str, Any]) -> OutcomeCase:
         case_id = _required_string(value, "id")
         expected = Expected.from_dict(_required_dict(value, "expected"))
         if not expected.verifier_command:
@@ -90,10 +90,10 @@ class GoldenCase:
         )
 
 
-def load_cases(path: str | Path) -> list[GoldenCase]:
-    """Load and validate newline-delimited golden cases."""
+def load_cases(path: str | Path) -> list[OutcomeCase]:
+    """Load and validate newline-delimited outcome cases."""
     source = Path(path)
-    cases: list[GoldenCase] = []
+    cases: list[OutcomeCase] = []
     seen_ids: set[str] = set()
 
     with source.open(encoding="utf-8") as handle:
@@ -116,7 +116,7 @@ def load_cases(path: str | Path) -> list[GoldenCase]:
                     f"{source}:{line_number}: case schema error{where}: {exc.message}"
                 ) from exc
 
-            case = GoldenCase.from_dict(payload)
+            case = OutcomeCase.from_dict(payload)
             if case.id in seen_ids:
                 raise ValueError(f"{source}:{line_number}: duplicate id {case.id!r}")
             seen_ids.add(case.id)

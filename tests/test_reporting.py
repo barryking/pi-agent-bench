@@ -22,22 +22,31 @@ def write_record(
     agent_profile=None,
 ):
     record = {
-        "schema_version": 1,
+        "schema_version": 3,
         "run_id": f"run-{profile}",
         "case_id": "case-1",
         "dataset_version": dataset_version,
         "started_at": "2026-07-25T12:00:00Z",
         "trial_number": 1,
+        "campaign": "default",
+        "cache_state": "unspecified",
         "model_configuration": {
             "profile": profile,
             "kind": "hosted" if profile != "dgx" else "local",
             "configuration": {"temperature": 0},
+            "configuration_fingerprint": f"model-{profile}",
+        },
+        "agent_configuration": {
+            "profile": agent_profile or "vanilla",
+            "configuration": {"tools": ["read"]} if agent_profile else {},
+            "configuration_fingerprint": f"agent-{agent_profile or 'vanilla'}",
         },
         "inspect_model": f"openai/{profile}",
         "harness": {
             "framework_version": "0.2.0",
             "inspect_version": "0.3.249",
             "pi_version_actual": "0.82.1",
+            "benchmark_fingerprint": "benchmark-a",
         },
         "success": success,
         "score": {
@@ -73,12 +82,6 @@ def write_record(
         "verifier": {"return_code": 0},
         "artifacts": {"inspect_log": "logs/example.eval"},
     }
-    if agent_profile:
-        record["agent_configuration"] = {
-            "profile": agent_profile,
-            "configuration": {"tools": ["read"]},
-            "configuration_fingerprint": f"agent-{agent_profile}",
-        }
     path.write_text(json.dumps(record), encoding="utf-8")
 
 
@@ -135,7 +138,7 @@ def test_writes_visualizer_friendly_wide_and_long_exports(tmp_path):
     metrics = [json.loads(line) for line in metrics_path.read_text(encoding="utf-8").splitlines()]
 
     assert rows[0]["profile"] == "dgx"
-    assert rows[0]["record_schema_version"] == "1"
+    assert rows[0]["record_schema_version"] == "3"
     assert rows[0]["started_at"] == "2026-07-25T12:00:00Z"
     assert rows[0]["pi_version"] == "0.82.1"
     assert rows[0]["reasoning_tokens"] == "4"
@@ -340,6 +343,30 @@ def test_invalid_attempts_never_enter_reports_or_exports(tmp_path):
     with runs_path.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert [row["run_id"] for row in rows] == ["run-dgx"]
+
+
+def test_current_run_record_fields_are_required(tmp_path):
+    path = tmp_path / "run.json"
+    write_record(
+        path,
+        profile="local",
+        success=True,
+        score=1.0,
+        wall=20,
+        input_tokens=100,
+        output_tokens=20,
+        cost=None,
+    )
+    record = json.loads(path.read_text(encoding="utf-8"))
+    del record["agent_configuration"]["configuration_fingerprint"]
+    path.write_text(json.dumps(record), encoding="utf-8")
+
+    try:
+        build_report(tmp_path)
+    except ValueError as exc:
+        assert "agent_configuration.configuration_fingerprint" in str(exc)
+    else:
+        raise AssertionError("incomplete current records must be rejected")
 
 
 def test_direct_pi_run_uses_profile_model_and_pi_tokens(tmp_path):

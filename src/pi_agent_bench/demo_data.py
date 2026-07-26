@@ -186,7 +186,7 @@ def _record(
         }
     }
     return {
-        "schema_version": 1,
+        "schema_version": 3,
         "synthetic": True,
         "run_id": run_id,
         "case_id": case_id,

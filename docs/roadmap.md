@@ -51,7 +51,7 @@ Checked boxes are done. Empty boxes are still needed.
 ## Cases
 
 - [x] Add safe case scaffolding
-- [x] Refuse unfinished draft cases
+- [x] Keep unfinished draft cases out of model runs
 - [x] Add two real public outcome pilots
 - [x] Prove all five owned starter outcome cases
 - [ ] Re-prove the external user-filter pilot with the current image

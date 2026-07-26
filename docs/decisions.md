@@ -33,8 +33,8 @@ comparing against one reference patch.
 
 ## Keep planning evidence optional
 
-If an agent writes a plan, Inspect keeps it in the trajectory. People or an
-independent grader may inspect it later. It does not replace outcome quality.
+If an agent writes a plan, Inspect keeps it in the trajectory. A person or a
+separate review tool may inspect it later. It does not replace outcome quality.
 
 If a plan is itself the requested deliverable, it should be its own outcome
 case with a suitable executable verifier.

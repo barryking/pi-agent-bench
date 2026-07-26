@@ -232,6 +232,6 @@
           <td>${escapeHtml(label(row.metric))}</td>
           <td class="number">${escapeHtml(formatMetric(row.value, row.unit))}</td>
           <td class="number">${escapeHtml((row.run_id || "—").slice(0, 10))}</td>
-          <td class="number">${escapeHtml((row.benchmark_fingerprint || "legacy").slice(0, 12))}</td>
+          <td class="number">${escapeHtml(row.benchmark_fingerprint.slice(0, 12))}</td>
         </tr>`).join("");
     }

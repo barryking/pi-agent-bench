@@ -11,7 +11,8 @@ from inspect_ai import Task, task
 from inspect_ai.dataset import Sample
 
 from pi_agent_bench.agent_profiles import AgentProfile, vanilla_agent_profile
-from pi_agent_bench.dataset import GoldenCase, load_cases
+from pi_agent_bench.case_assets import resolve_starting_repository
+from pi_agent_bench.dataset import OutcomeCase, load_cases
 from pi_agent_bench.inspect_agent import configure_pi_case, pi_agent
 from pi_agent_bench.inspect_scorers import outcome_verifier_scorer
 
@@ -80,7 +81,7 @@ def outcome_tasks(
 
 def _outcome_task(
     source: Path,
-    cases: list[GoldenCase],
+    cases: list[OutcomeCase],
     version: str,
     limits: tuple[int, int, int],
     *,
@@ -128,7 +129,7 @@ def _outcome_task(
 
 def load_case_suite(
     dataset: str | Path,
-) -> tuple[Path, list[GoldenCase], str]:
+) -> tuple[Path, list[OutcomeCase], str]:
     """Load one outcome suite and validate its starting repositories and verifiers."""
     source = Path(dataset).expanduser()
     if not source.is_absolute():
@@ -150,7 +151,7 @@ def load_case_suite(
     return source, cases, versions.pop()
 
 
-def _outcome_sample(case: GoldenCase, source: Path) -> Sample:
+def _outcome_sample(case: OutcomeCase, source: Path) -> Sample:
     starting_repository, _ = _outcome_assets(case, source)
     return Sample(
         id=case.id,
@@ -161,7 +162,7 @@ def _outcome_sample(case: GoldenCase, source: Path) -> Sample:
     )
 
 
-def _outcome_assets(case: GoldenCase, source: Path) -> tuple[Path, Path]:
+def _outcome_assets(case: OutcomeCase, source: Path) -> tuple[Path, Path]:
     starting_repository = _starting_repository(case, source)
     expected_verifier = f"/opt/verifiers/{case.id}/verify.py"
     if expected_verifier not in case.expected.verifier_command:
@@ -172,16 +173,17 @@ def _outcome_assets(case: GoldenCase, source: Path) -> tuple[Path, Path]:
     return starting_repository, verifier.resolve()
 
 
-def _starting_repository(case: GoldenCase, source: Path) -> Path:
+def _starting_repository(case: OutcomeCase, source: Path) -> Path:
     starting_repository_value = case.metadata.get("starting_repository")
     if not isinstance(starting_repository_value, str) or not starting_repository_value:
         raise ValueError(f"{case.id}: metadata.starting_repository must be a path")
-    starting_repository = _resolve_asset(starting_repository_value, source)
-    if not starting_repository.is_dir():
-        raise ValueError(
-            f"{case.id}: starting repository directory does not exist: "
-            f"{starting_repository}"
+    try:
+        starting_repository = resolve_starting_repository(
+            starting_repository_value,
+            source,
         )
+    except ValueError as exc:
+        raise ValueError(f"{case.id}: {exc}") from exc
     if (starting_repository / ".git").exists():
         _validate_git_starting_repository(case, starting_repository)
     return starting_repository
@@ -195,15 +197,18 @@ def _workspace_setup() -> str:
         "  git clean -ffdqx\n"
         "else\n"
         "  git init -q\n"
-        "  git config user.name 'Agent Eval Baseline'\n"
-        "  git config user.email 'eval@example.invalid'\n"
+        "  git config user.name 'Pi Agent Bench Baseline'\n"
+        "  git config user.email 'pi-agent-bench@example.invalid'\n"
         "  git add .\n"
         "  git commit -qm baseline\n"
         "fi\n"
     )
 
 
-def _validate_git_starting_repository(case: GoldenCase, starting_repository: Path) -> None:
+def _validate_git_starting_repository(
+    case: OutcomeCase,
+    starting_repository: Path,
+) -> None:
     source_commit = case.metadata.get("source_commit")
     if not isinstance(source_commit, str) or not source_commit:
         raise ValueError(f"{case.id}: cloned starting repositories require metadata.source_commit")
@@ -226,36 +231,20 @@ def _validate_git_starting_repository(case: GoldenCase, starting_repository: Pat
     ).stdout.strip()
     if status:
         raise ValueError(f"{case.id}: cloned starting repository must be clean")
-
-
-def _resolve_asset(value: str, dataset: Path) -> Path:
-    requested = Path(value).expanduser()
-    candidates = (
-        [requested]
-        if requested.is_absolute()
-        else [dataset.parent / requested, REPOSITORY_ROOT / requested]
-    )
-    for candidate in candidates:
-        resolved = candidate.resolve()
-        if resolved.exists():
-            return resolved
-    return candidates[-1].resolve()
-
-
-def _suite_tags(cases: list[GoldenCase]) -> list[str]:
+def _suite_tags(cases: list[OutcomeCase]) -> list[str]:
     return sorted({tag for case in cases for tag in case.tags})
 
 
 def _limit_groups(
-    cases: list[GoldenCase],
-) -> list[tuple[tuple[int, int, int], list[GoldenCase]]]:
-    groups: dict[tuple[int, int, int], list[GoldenCase]] = defaultdict(list)
+    cases: list[OutcomeCase],
+) -> list[tuple[tuple[int, int, int], list[OutcomeCase]]]:
+    groups: dict[tuple[int, int, int], list[OutcomeCase]] = defaultdict(list)
     for case in cases:
         groups[_case_limits(case)].append(case)
     return sorted(groups.items())
 
 
-def _uniform_limits(cases: list[GoldenCase], source: Path) -> tuple[int, int, int]:
+def _uniform_limits(cases: list[OutcomeCase], source: Path) -> tuple[int, int, int]:
     groups = _limit_groups(cases)
     if len(groups) != 1:
         raise ValueError(
@@ -265,7 +254,7 @@ def _uniform_limits(cases: list[GoldenCase], source: Path) -> tuple[int, int, in
     return groups[0][0]
 
 
-def _case_limits(case: GoldenCase) -> tuple[int, int, int]:
+def _case_limits(case: OutcomeCase) -> tuple[int, int, int]:
     return (case.limits.seconds, case.limits.turns, case.limits.total_tokens)
 
 
@@ -283,7 +272,7 @@ def _limits_metadata(limits: tuple[int, int, int]) -> dict[str, int]:
     }
 
 
-def _declared_score_components(case: GoldenCase) -> tuple[str, ...]:
+def _declared_score_components(case: OutcomeCase) -> tuple[str, ...]:
     value = case.metadata.get("score_components", [])
     if not isinstance(value, list) or not all(
         isinstance(component, str) and component for component in value
@@ -294,7 +283,7 @@ def _declared_score_components(case: GoldenCase) -> tuple[str, ...]:
     return tuple(value)
 
 
-def _reject_draft_cases(cases: list[GoldenCase]) -> None:
+def _reject_draft_cases(cases: list[OutcomeCase]) -> None:
     drafts = [case.id for case in cases if case.metadata.get("draft") is not False]
     if drafts:
         raise ValueError(
@@ -304,7 +293,7 @@ def _reject_draft_cases(cases: list[GoldenCase]) -> None:
         )
 
 
-def _case_metadata(case: GoldenCase) -> dict[str, Any]:
+def _case_metadata(case: OutcomeCase) -> dict[str, Any]:
     return {
         "case_id": case.id,
         "dataset_version": case.metadata.get("dataset_version"),

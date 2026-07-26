@@ -28,7 +28,7 @@ def export_inspect_logs(
     for info in list_eval_logs(str(Path(logs_dir).expanduser().resolve())):
         log = read_eval_log(info.name)
         metadata = getattr(log.eval, "metadata", None) or {}
-        benchmark = metadata.get("pi_agent_bench") or metadata.get("agent_evals")
+        benchmark = metadata.get("pi_agent_bench")
         if not isinstance(benchmark, dict):
             warnings.warn(
                 f"skipped Inspect log without Pi Agent Bench metadata: {info.name}",
@@ -37,6 +37,20 @@ def export_inspect_logs(
             continue
         profile = benchmark.get("profile")
         agent_profile = benchmark.get("agent_profile")
+        campaign = benchmark.get("campaign")
+        cache_state = benchmark.get("cache_state")
+        if not isinstance(campaign, str) or not campaign:
+            warnings.warn(
+                f"skipped Inspect log without a campaign: {info.name}",
+                stacklevel=2,
+            )
+            continue
+        if cache_state not in {"unspecified", "cold", "warm"}:
+            warnings.warn(
+                f"skipped Inspect log with an invalid cache state: {info.name}",
+                stacklevel=2,
+            )
+            continue
         try:
             written.extend(
                 write_run_records(
@@ -44,8 +58,8 @@ def export_inspect_logs(
                     results_dir,
                     profile,
                     agent_profile=agent_profile,
-                    campaign=str(benchmark.get("campaign", "default")),
-                    cache_state=str(benchmark.get("cache_state", "unspecified")),
+                    campaign=campaign,
+                    cache_state=cache_state,
                 )
             )
         except ValueError as exc:
@@ -341,7 +355,13 @@ def _inspect_timing(sample: Any) -> dict[str, float | int | None]:
 def _profile_identity(profile: ModelProfile | dict[str, Any]) -> dict[str, Any]:
     if isinstance(profile, ModelProfile):
         return profile.public_identity()
-    required = {"profile", "kind", "model", "configuration"}
+    required = {
+        "profile",
+        "kind",
+        "model",
+        "configuration",
+        "configuration_fingerprint",
+    }
     if not isinstance(profile, dict) or not required.issubset(profile):
         raise ValueError("Inspect log has no complete benchmark profile identity")
     return dict(profile)

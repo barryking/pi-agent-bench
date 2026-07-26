@@ -89,7 +89,6 @@ LOCAL_MODEL_BASE_URL=http://192.168.1.20:8000/v1
 LOCAL_MODEL_API_KEY=local-only-key
 HOSTED_QUALITY_API_KEY=secret
 HOSTED_COST_API_KEY=secret
-INDEPENDENT_GRADER_API_KEY=secret
 ```
 
 Put public model details in `configs/model-baselines.local.json`.

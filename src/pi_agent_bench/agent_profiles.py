@@ -192,7 +192,7 @@ class AgentProfile:
 
 
 def vanilla_agent_profile() -> AgentProfile:
-    """Return the clean baseline used when old logs have no agent identity."""
+    """Return the clean default agent profile."""
     return AgentProfile(
         name="vanilla",
         description="Clean Pi with no personal or project extras.",

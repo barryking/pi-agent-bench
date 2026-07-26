@@ -120,7 +120,8 @@ If an extension adds a tool, put its tool name in this list too.
 `context_files` holds standing instructions such as `AGENTS.md`.
 
 Pi Agent Bench joins the selected files into one temporary `AGENTS.md`. It does
-not load the `AGENTS.md` from your Mac or from the case starting repository by accident.
+not load the `AGENTS.md` from your Mac or from the case starting repository by
+accident.
 
 ### System prompt
 
@@ -290,7 +291,7 @@ resource and executes both example tools.
 
 Pi's own guides explain the resource formats:
 
-- [context files](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/context.md)
+- [context files](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/usage.md)
 - [skills](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/skills.md)
 - [extensions](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md)
 - [prompt templates](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/prompt-templates.md)

@@ -17,7 +17,7 @@ Inspect is the evaluation framework. This repository does not replace it.
 
 - Inspect owns runs, limits, logs, scores, and detailed evidence.
 - This repository adds the Pi connection, cases, protected checks, model setup,
-  local-hardware facts, and simple comparisons across runs.
+  reproducible configuration records, and simple comparisons across runs.
 - Files under `results/` are copies made for charts. They can be rebuilt from
   Inspect logs.
 
@@ -307,10 +307,13 @@ This is the small Inspect-to-Pi bridge, not the model being tested. Open the
 run metadata to see the profile, or use the Pi Agent Bench dashboard to see the
 real provider and model name recorded by Pi.
 
-For one saved campaign, point `--log-dir` at its folder. For example:
+With `--resume`, each model setup has its own folder. The name contains the
+campaign and model profile. For example:
 
 ```bash
-inspect view --log-dir logs/pilot-user-list-filter --port 7575
+inspect view \
+  --log-dir logs/starter-outcome-baseline-v1-openai-codex-gpt-5-6-sol \
+  --port 7575
 ```
 
 You can also build result files without opening a browser:
@@ -344,11 +347,13 @@ You or an AI must:
 1. prepare the starting files;
 2. write a clear task;
 3. replace the failing verifier with real checks;
-4. prove the untouched starting repository fails;
-5. prove a known-good answer passes; and
-6. set `metadata.draft` to `false`.
+4. check the draft file and build the Docker image;
+5. prove the untouched starting repository fails;
+6. prove a known-good answer passes;
+7. set `metadata.draft` to `false`; and
+8. check the finished file again.
 
-Then check the case:
+Use these commands before changing `draft` to `false`:
 
 ```bash
 pi-bench validate evals/custom/outcome-example-v1.jsonl
@@ -359,6 +364,8 @@ pi-bench prove-case \
   --known-good-diff <private-known-good.diff> \
   --output results/case-proofs/outcome-example.json
 ```
+
+Now set `draft` to `false` and run `pi-bench validate` one more time.
 
 Read [Scoring and making cases](docs/scoring-and-extending.md) for examples.
 
@@ -393,7 +400,7 @@ The last command must print nothing.
 Pi Agent Bench copies this repository into Docker. The AI never edits the host
 copy. Read [Local case repositories](local-repos/README.md).
 
-## Check old results again
+## Recheck a saved result
 
 Re-run the protected outcome verifier without rerunning the model:
 
@@ -406,7 +413,7 @@ repository.
 
 ## Where files go
 
-- `logs/*.eval` — full Inspect records.
+- `logs/**/*.eval` — full Inspect records, sometimes inside campaign folders.
 - `results/*.json` — rebuildable chart records for each trial.
 - `results/*.diff` — code changes made by the AI.
 - `results/summary.md` — a readable summary.

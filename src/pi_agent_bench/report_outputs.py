@@ -106,23 +106,46 @@ def write_report(
 
 
 def _load_records(source: Path) -> list[dict[str, Any]]:
-    records = [
-        json.loads(path.read_text(encoding="utf-8"))
-        for path in sorted(source.glob("*.json"))
-        if path.name != "summary.json"
-    ]
-    return [record for record in records if record.get("validity", {}).get("valid") is not False]
+    records = []
+    for path in sorted(source.glob("*.json")):
+        if path.name == "summary.json":
+            continue
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if record.get("validity", {}).get("valid") is False:
+            continue
+        _validate_record(record, path)
+        records.append(record)
+    return records
+
+
+def _validate_record(record: dict[str, Any], path: Path) -> None:
+    if record.get("schema_version") != 3:
+        raise ValueError(f"{path}: expected run record schema_version 3")
+    for field in ("run_id", "case_id", "dataset_version", "campaign"):
+        if not isinstance(record.get(field), str) or not record[field]:
+            raise ValueError(f"{path}: run record is missing {field}")
+    if record.get("cache_state") not in {"unspecified", "cold", "warm"}:
+        raise ValueError(f"{path}: cache_state must be unspecified, cold, or warm")
+    for field in ("model_configuration", "agent_configuration"):
+        identity = record.get(field)
+        if not isinstance(identity, dict) or not identity.get("profile"):
+            raise ValueError(f"{path}: run record is missing {field}.profile")
+        if not isinstance(identity.get("configuration"), dict):
+            raise ValueError(f"{path}: run record is missing {field}.configuration")
+        if not identity.get("configuration_fingerprint"):
+            raise ValueError(
+                f"{path}: run record is missing {field}.configuration_fingerprint"
+            )
+    harness = record.get("harness")
+    if not isinstance(harness, dict) or not harness.get("benchmark_fingerprint"):
+        raise ValueError(f"{path}: run record is missing harness.benchmark_fingerprint")
 
 
 def _agent_configuration(record: dict[str, Any]) -> dict[str, Any]:
     value = record.get("agent_configuration")
-    if isinstance(value, dict) and value.get("profile"):
-        return value
-    return {
-        "profile": "vanilla",
-        "configuration": {},
-        "configuration_fingerprint": None,
-    }
+    if not isinstance(value, dict) or not value.get("profile"):
+        raise ValueError("run record is missing agent_configuration.profile")
+    return value
 
 
 def _comparison_profile(record: dict[str, Any]) -> str:
@@ -150,8 +173,8 @@ def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
         "case_id": record.get("case_id"),
         "dataset_version": record.get("dataset_version"),
         "started_at": record.get("started_at"),
-        "campaign": record.get("campaign", "legacy"),
-        "cache_state": record.get("cache_state", "unspecified"),
+        "campaign": record["campaign"],
+        "cache_state": record["cache_state"],
         "trial_number": record.get("trial_number"),
         "profile": _comparison_profile(record),
         "model_profile": profile.get("profile"),

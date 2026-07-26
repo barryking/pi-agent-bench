@@ -109,5 +109,5 @@ tool calls, plan text, edits, verifier output, tokens, time, and errors.
 pi-bench replay-outcome logs/<run>.eval
 ```
 
-This applies the saved diff to a temporary starting repository and runs the protected
-verifier again. It does not call the model.
+This applies the saved diff to a temporary starting repository and runs the
+protected verifier again. It does not call the model.

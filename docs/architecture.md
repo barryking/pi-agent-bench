@@ -75,8 +75,8 @@ The main chart shows quality against total time. Planning text can be reviewed
 inside the Inspect log, but it does not replace the final outcome score.
 
 If the requested outcome really is a plan or design document, create a case
-whose starting repository, instruction, and verifier check that document. It is still one
-complete outcome.
+whose starting repository, instruction, and verifier check that document. It
+is still one complete outcome.
 
 ## Source of truth
 
