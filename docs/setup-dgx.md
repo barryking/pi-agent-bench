@@ -12,16 +12,22 @@ The DGX does not need the case repository.
 
 ## 1. Check the DGX
 
-Finish NVIDIA's normal first-time setup.
+Finish NVIDIA's normal first-time setup and install the recommended updates
+for your exact DGX model.
 
-Check that Docker can see the GPU:
+DGX OS includes NVIDIA's drivers and system settings. Check that the operating
+system can see the GPU:
 
 ```bash
 nvidia-smi
-docker run --rm --gpus all nvcr.io/nvidia/cuda:13.0.0-base-ubuntu24.04 nvidia-smi
 ```
 
-Stop if these commands fail.
+Stop if this command cannot identify the NVIDIA GPU or driver.
+
+Use NVIDIA's current guide for your hardware:
+
+- [DGX Spark first-time setup](https://docs.nvidia.com/dgx/dgx-spark/first-boot.html)
+- [DGX OS initial setup](https://docs.nvidia.com/dgx/dgx-os-7-user-guide/initial_setup.html)
 
 ## 2. Give the DGX a safe network address
 
@@ -43,19 +49,30 @@ If possible, give the DGX a fixed address so it does not keep changing.
 The first supported example is vLLM. vLLM is software that serves a model using
 an API that looks like OpenAI's API.
 
-Before starting it, write down:
+Install and run the model server directly on the DGX. Follow the current
+installation guide for the DGX architecture, CUDA version, model, and
+compression type. The benchmark does not install or manage the model server.
 
-- the exact vLLM image;
+For vLLM, read:
+
+- [vLLM GPU installation](https://docs.vllm.ai/en/stable/getting_started/installation/gpu/)
+- [vLLM OpenAI-compatible server](https://docs.vllm.ai/en/latest/serving/openai_compatible_server/)
+
+Before starting the server, write down:
+
+- the exact model-server version;
 - the exact model name and revision;
 - the compression type, such as FP8 or NVFP4;
+- the CUDA and model-framework versions;
 - the context size;
 - whether prefix caching is on; and
-- any special attention setting.
+- the full performance settings used to start the server.
 
 These details are part of the result. Changing them makes a different profile.
 
-Follow the current vLLM and NVIDIA instructions for your exact DGX and model.
-Do not copy an old command without checking it.
+Keep the model server running across normal benchmark trials. Record cold
+model starts separately from warm trials. Restarting or changing the server
+between trials makes the timing harder to compare.
 
 ## 4. Check the server on the DGX
 
