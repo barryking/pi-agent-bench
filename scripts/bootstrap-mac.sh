@@ -21,6 +21,7 @@ python3.11 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 .venv/bin/pi-bench init
 docker compose -f docker/compose.yaml build
+.venv/bin/python scripts/check-starter-verifiers.py
 .venv/bin/ruff check .
 .venv/bin/pytest
 

@@ -4,21 +4,24 @@ Put a clean copy of each real coding project in this folder:
 
 ```text
 repos/
-  code-idempotency-001/
+  source-project-name/
 ```
 
 Git ignores everything here except this README. This helps stop a private or
 third-party project from being committed by mistake.
+
+You do not need this folder for the owned starter suite. It uses the committed
+code under `fixtures/`.
 
 ## Add a repository
 
 Run:
 
 ```bash
-git clone <repository-url> repos/code-idempotency-001
-git -C repos/code-idempotency-001 checkout <full-commit-sha>
-git -C repos/code-idempotency-001 status --short
-git -C repos/code-idempotency-001 rev-parse HEAD
+git clone <repository-url> repos/source-project-name
+git -C repos/source-project-name checkout <full-commit-sha>
+git -C repos/source-project-name status --short
+git -C repos/source-project-name rev-parse HEAD
 ```
 
 The `status` command must print nothing. This means the copy is clean.
@@ -28,7 +31,7 @@ The last command prints the exact starting commit. Put it in the case:
 ```json
 {
   "metadata": {
-    "fixture": "repos/code-idempotency-001",
+    "fixture": "repos/source-project-name",
     "source_commit": "<full-commit-sha>",
     "dataset_version": "1.0",
     "synthetic": false

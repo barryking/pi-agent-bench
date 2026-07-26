@@ -1,0 +1,9 @@
+{
+  "name": "pi-agent-bench-starter-node-client",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

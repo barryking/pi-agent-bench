@@ -13,7 +13,7 @@ from inspect_ai.log import read_eval_log
 
 from .verification import finite_number, primary_score, quality_value, verifier_payload
 from .versions import SANDBOX_IMAGE
-from .workspace import prepare_workspace
+from .workspace import prepare_workspace, remove_docker_workspace_contents
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -66,28 +66,31 @@ def replay_coding_log(
             dir=replay_root,
         ) as temporary:
             workspace = Path(temporary) / "workspace"
-            prepare_workspace(fixture, final_diff, workspace)
-            completed = subprocess.run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "--network",
-                    "none",
-                    "--user",
-                    "root",
-                    "--volume",
-                    f"{workspace}:/workspace",
-                    "--workdir",
-                    "/workspace",
-                    SANDBOX_IMAGE,
-                    *verifier,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=300,
-                check=False,
-            )
+            try:
+                prepare_workspace(fixture, final_diff, workspace)
+                completed = subprocess.run(
+                    [
+                        "docker",
+                        "run",
+                        "--rm",
+                        "--network",
+                        "none",
+                        "--user",
+                        "root",
+                        "--volume",
+                        f"{workspace}:/workspace",
+                        "--workdir",
+                        "/workspace",
+                        SANDBOX_IMAGE,
+                        *verifier,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    check=False,
+                )
+            finally:
+                remove_docker_workspace_contents(workspace, SANDBOX_IMAGE)
         payload = verifier_payload(completed.stdout)
         original_quality = quality_value(score.value)
         replay_quality = finite_number(payload.get("score"))

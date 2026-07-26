@@ -29,6 +29,7 @@ def planning_concept_scorer():
         values = _score_values(
             result.score,
             expected.success_threshold,
+            required_components=expected.required_components,
         )
         return Score(
             value=values,
@@ -125,6 +126,7 @@ def planning_rubric_scorer(component_names: list[str] | None = None):
             expected.success_threshold,
             components,
             component_names,
+            expected.required_components,
         )
         return Score(
             value=values,
@@ -136,6 +138,7 @@ def planning_rubric_scorer(component_names: list[str] | None = None):
                 "grader_model": grader_model,
                 "grader_raw_response": result.completion,
                 "success_threshold": expected.success_threshold,
+                "required_components": list(expected.required_components),
                 "matched_forbidden": list(concept_result.matched_forbidden),
                 "pi": telemetry.summary,
                 "pi_version": telemetry.pi_version,
@@ -182,6 +185,7 @@ def coding_verifier_scorer(component_names: list[str] | None = None):
             expected.success_threshold,
             components,
             component_names,
+            expected.required_components,
         )
         return Score(
             value=values,
@@ -190,6 +194,7 @@ def coding_verifier_scorer(component_names: list[str] | None = None):
                 "components": components,
                 "scoring_method": "deterministic-executable-verifier",
                 "success_threshold": expected.success_threshold,
+                "required_components": list(expected.required_components),
                 "verifier_return_code": result.returncode,
                 "verifier_stdout": result.stdout,
                 "verifier_stderr": result.stderr,
@@ -209,13 +214,17 @@ def _score_values(
     success_threshold: float,
     components: dict[str, Any] | None = None,
     component_names: list[str] | None = None,
+    required_components: tuple[str, ...] = (),
 ) -> dict[str, float]:
     """Return stable first-class Inspect score fields for a task group."""
+    supplied = components or {}
+    critical_passed = all(
+        _component_passed(supplied.get(name)) for name in required_components
+    )
     values = {
         "quality": quality,
-        "success": float(quality >= success_threshold),
+        "success": float(quality >= success_threshold and critical_passed),
     }
-    supplied = components or {}
     names = component_names if component_names is not None else sorted(supplied)
     for name in names:
         value = supplied.get(name)
@@ -225,6 +234,17 @@ def _score_values(
         else:
             values[field] = math.nan
     return values
+
+
+def _component_passed(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+        and float(value) >= 1.0
+    )
 
 
 def _expected_metadata(state: TaskState) -> dict[str, Any]:

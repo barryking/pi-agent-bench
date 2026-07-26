@@ -44,3 +44,37 @@ def run_git(workspace: Path, *args: str) -> None:
         timeout=60,
         check=True,
     )
+
+
+def remove_docker_workspace_contents(workspace: Path, image: str) -> None:
+    """Remove disposable files with the same root access used by a verifier."""
+    if not workspace.exists():
+        return
+    completed = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--user",
+            "root",
+            "--volume",
+            f"{workspace}:/workspace",
+            image,
+            "find",
+            "/workspace",
+            "-mindepth",
+            "1",
+            "-delete",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    if completed.returncode:
+        raise RuntimeError(
+            "could not remove temporary Docker workspace contents: "
+            f"{completed.stderr.strip()}"
+        )

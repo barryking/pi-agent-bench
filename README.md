@@ -57,7 +57,8 @@ Quality is a number from `0` to `1`.
 - `1` means everything checked by the case worked.
 
 Success is a yes-or-no result. Each case has a success line called a
-`success_threshold`.
+`success_threshold`. Coding cases may also name critical checks. Every
+critical check must pass, even when the weighted quality score is high enough.
 
 For example:
 
@@ -147,6 +148,9 @@ For a DGX server, follow [DGX setup](docs/setup-dgx.md).
 
 ## Run your first campaign
 
+The owned starter suite has five useful jobs. It is included in the clone, so
+you do not need to download another repository.
+
 Start with the two subscription cloud controls. This gives you a baseline
 before you test a local model:
 
@@ -156,7 +160,8 @@ pi-bench campaign coding \
   --run-profile openai-codex-gpt-5.6-luna \
   --profiles configs/model-baselines.local.json \
   --env-file .env.local \
-  --campaign cloud-coding-baseline \
+  --dataset evals/starter/coding.jsonl \
+  --campaign starter-coding-baseline-v1 \
   --epochs 3 \
   --resume
 ```
@@ -171,7 +176,8 @@ pi-bench campaign coding \
   --run-profile local-candidate \
   --profiles configs/model-baselines.local.json \
   --env-file .env.local \
-  --campaign local-coding-baseline \
+  --dataset evals/starter/coding.jsonl \
+  --campaign starter-coding-baseline-v1 \
   --epochs 3 \
   --resume
 ```
@@ -189,6 +195,8 @@ pi-bench campaign all \
   --grader-profile independent-grader \
   --profiles configs/model-baselines.local.json \
   --env-file .env.local \
+  --planning-dataset evals/starter/planning.jsonl \
+  --coding-dataset evals/starter/coding.jsonl \
   --campaign first-full-baseline \
   --epochs 3 \
   --resume
@@ -322,6 +330,15 @@ Two real pilot pairs are included:
 
 - `evals/pilots/user-list-filter/` — start here;
 - `evals/pilots/user-idempotency/` — a harder database and concurrency job.
+
+The recommended examples are under `evals/starter/`. They use code owned by
+this project and run without cloning anything else:
+
+- user filtering and pagination validation;
+- configuration precedence;
+- webhook signature checking;
+- cursor pagination in Node; and
+- durable SQLite idempotency.
 
 ## Use a real repository
 

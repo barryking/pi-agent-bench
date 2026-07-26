@@ -160,6 +160,9 @@ Inspect stores separate fields for:
 - success; and
 - each declared rubric or verifier part.
 
+Coding cases may mark some verifier parts as required. Quality still shows
+partial progress, but success is false when any required part fails.
+
 The small Pi Agent Bench record is made from the Inspect score. Inspect remains
 the main evidence.
 

@@ -13,7 +13,7 @@ from typing import Any
 from .inspect_tasks import load_case_suite
 from .verification import finite_number, verifier_payload
 from .versions import SANDBOX_IMAGE
-from .workspace import prepare_workspace
+from .workspace import prepare_workspace, remove_docker_workspace_contents
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -43,17 +43,21 @@ def prove_coding_case(
     temporary_parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".case-proof-", dir=temporary_parent) as temporary:
         root = Path(temporary)
-        before_workspace = root / "before"
-        after_workspace = root / "after"
-        prepare_workspace(fixture, "", before_workspace)
-        prepare_workspace(fixture, patch, after_workspace)
-        before = _run_verifier(before_workspace, case.expected.verifier_command)
-        after = _run_verifier(after_workspace, case.expected.verifier_command)
+        try:
+            before_workspace = root / "before"
+            after_workspace = root / "after"
+            prepare_workspace(fixture, "", before_workspace)
+            prepare_workspace(fixture, patch, after_workspace)
+            before = _run_verifier(before_workspace, case.expected.verifier_command)
+            after = _run_verifier(after_workspace, case.expected.verifier_command)
+        finally:
+            remove_docker_workspace_contents(root, SANDBOX_IMAGE)
 
     proof = assess_case_proof(
         before,
         after,
         success_threshold=case.expected.success_threshold,
+        required_components=case.expected.required_components,
     )
     record = {
         "schema_version": 1,
@@ -65,6 +69,7 @@ def prove_coding_case(
         "sandbox_image": SANDBOX_IMAGE,
         "verifier_command": list(case.expected.verifier_command),
         "known_good_diff_sha256": hashlib.sha256(patch.encode()).hexdigest(),
+        "required_components": list(case.expected.required_components),
         **proof,
     }
     destination = Path(output).expanduser().resolve()
@@ -86,6 +91,7 @@ def assess_case_proof(
     after: dict[str, Any],
     *,
     success_threshold: float,
+    required_components: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Check the two scores without hiding missing or broken verifier output."""
     before_quality = _quality(before)
@@ -93,11 +99,18 @@ def assess_case_proof(
     before_failed = (
         before_quality is not None and before_quality < success_threshold
     )
+    after_components = after.get("components", {})
+    critical_passed = isinstance(after_components, dict) and all(
+        _component_passed(after_components.get(name)) for name in required_components
+    )
     after_passed = (
-        after_quality is not None and after_quality >= success_threshold
+        after_quality is not None
+        and after_quality >= success_threshold
+        and critical_passed
     )
     return {
         "success_threshold": success_threshold,
+        "required_components": list(required_components),
         "before": {
             "quality": before_quality,
             "failed_as_expected": before_failed,
@@ -161,3 +174,10 @@ def _resolve_fixture(value: Any, dataset: Path) -> Path:
 
 def _quality(payload: dict[str, Any]) -> float | None:
     return finite_number(payload.get("score"))
+
+
+def _component_passed(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    number = finite_number(value)
+    return number is not None and number >= 1.0

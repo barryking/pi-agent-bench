@@ -235,10 +235,10 @@ def _record(
         },
         "inspect_model": spec["model"],
         "harness": {
-            "framework_version": "0.3.0-demo",
+            "framework_version": "0.4.0-demo",
             "inspect_version": "0.3.249",
             "pi_version_actual": "0.82.1",
-            "sandbox_image": "pi-agent-bench-sandbox:0.3.0",
+            "sandbox_image": "pi-agent-bench-sandbox:0.4.0",
             "repository_commit": "demo000000000000000000000000000000000000",
             "repository_branch": "synthetic-preview",
             "repository_dirty": False,

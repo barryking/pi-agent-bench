@@ -156,6 +156,7 @@ def _coding_case(case_id: str, dataset_version: str) -> dict:
                 f"/opt/verifiers/{case_id}/verify.py",
             ],
             "success_threshold": 1.0,
+            "required_components": ["requirements"],
         },
         "metadata": {
             "dataset_version": dataset_version,

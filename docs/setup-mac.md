@@ -120,6 +120,7 @@ Fix every message before running a benchmark.
 
 ```bash
 pi-bench run coding \
+  --dataset evals/starter/coding.jsonl \
   --profile hosted-quality \
   --profiles configs/model-baselines.local.json \
   --env-file .env.local \
@@ -183,7 +184,7 @@ Logs and results stay on the Mac. Git ignores them.
 To remove only the reusable Docker image:
 
 ```bash
-docker image rm pi-agent-bench-sandbox:0.3.0
+docker image rm pi-agent-bench-sandbox:0.4.0
 ```
 
 Do this only when you mean to rebuild it.

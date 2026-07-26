@@ -106,8 +106,8 @@ def test_builds_profile_comparison_report(tmp_path):
     report = build_report(tmp_path)
     markdown, summary_json = write_report(report, tmp_path / "summary.md")
 
-    cohort = report["cohorts"]["coding@1"]
-    assert report["schema_version"] == 2
+    [cohort] = report["cohorts"].values()
+    assert report["schema_version"] == 3
     assert cohort["profiles"]["dgx"]["success_rate"] == 1.0
     assert cohort["profiles"]["dgx"]["provider_reported_total_cost"] is None
     assert cohort["profiles"]["hosted-quality"]["provider_reported_total_cost"] == 0.25
@@ -188,8 +188,75 @@ def test_report_never_aggregates_planning_and_coding(tmp_path):
 
     report = build_report(tmp_path)
 
-    assert report["cohorts"]["planning@plan-1"]["profiles"]["dgx"]["mean_quality_score"] == 0
-    assert report["cohorts"]["coding@code-1"]["profiles"]["dgx"]["mean_quality_score"] == 1
+    by_phase = {cohort["phase"]: cohort for cohort in report["cohorts"].values()}
+    assert by_phase["planning"]["profiles"]["dgx"]["mean_quality_score"] == 0
+    assert by_phase["coding"]["profiles"]["dgx"]["mean_quality_score"] == 1
+
+
+def test_report_keeps_campaigns_and_cache_states_separate(tmp_path):
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+    write_record(
+        first,
+        profile="local",
+        success=True,
+        score=1.0,
+        wall=10,
+        input_tokens=10,
+        output_tokens=2,
+        cost=None,
+    )
+    write_record(
+        second,
+        profile="local",
+        success=False,
+        score=0.0,
+        wall=20,
+        input_tokens=20,
+        output_tokens=4,
+        cost=None,
+    )
+    first_record = json.loads(first.read_text(encoding="utf-8"))
+    first_record.update({"campaign": "cold-check", "cache_state": "cold"})
+    first.write_text(json.dumps(first_record), encoding="utf-8")
+    second_record = json.loads(second.read_text(encoding="utf-8"))
+    second_record.update({"campaign": "warm-check", "cache_state": "warm"})
+    second.write_text(json.dumps(second_record), encoding="utf-8")
+
+    report = build_report(tmp_path)
+
+    assert len(report["cohorts"]) == 2
+    assert {cohort["campaign"] for cohort in report["cohorts"].values()} == {
+        "cold-check",
+        "warm-check",
+    }
+
+
+def test_report_keeps_different_benchmark_builds_separate(tmp_path):
+    for name, fingerprint in (("first", "build-a"), ("second", "build-b")):
+        path = tmp_path / f"{name}.json"
+        write_record(
+            path,
+            profile="local",
+            success=True,
+            score=1.0,
+            wall=10,
+            input_tokens=10,
+            output_tokens=2,
+            cost=None,
+        )
+        record = json.loads(path.read_text(encoding="utf-8"))
+        record["campaign"] = "same-campaign"
+        record["harness"]["benchmark_fingerprint"] = fingerprint
+        path.write_text(json.dumps(record), encoding="utf-8")
+
+    report = build_report(tmp_path)
+
+    assert len(report["cohorts"]) == 2
+    assert {
+        cohort["benchmark_fingerprint"]
+        for cohort in report["cohorts"].values()
+    } == {"build-a", "build-b"}
 
 
 def test_missing_usage_is_not_exported_as_zero(tmp_path):

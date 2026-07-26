@@ -20,6 +20,20 @@ quality >= success threshold  → success
 quality < success threshold   → failure
 ```
 
+Coding cases can also have `required_components`. These are the parts that
+must work. A high total score cannot hide a broken core requirement.
+
+```json
+"required_components": [
+  "regression",
+  "required_behaviour",
+  "public_tests"
+]
+```
+
+Use the quality score to show partial progress. Use success to mean the job is
+complete enough to accept.
+
 Changing the task, rubric, verifier, or success line changes the case. Give the
 dataset a new version when this happens.
 
@@ -202,7 +216,8 @@ patch.
       "python3",
       "/opt/verifiers/code-example-001/verify.py"
     ],
-    "success_threshold": 1
+    "success_threshold": 1,
+    "required_components": ["requirements", "regression", "tests"]
   },
   "metadata": {
     "dataset_version": "1.0",
@@ -247,6 +262,15 @@ Before using a case for ranking:
 
 The first two pilots live under `evals/pilots/`. Start with
 `user-list-filter`. It is smaller than the idempotency case.
+
+For examples that need no external repository, start with:
+
+```text
+evals/starter/planning.jsonl
+evals/starter/coding.jsonl
+```
+
+These five paired cases use fixtures owned by Pi Agent Bench.
 
 ## Add a model
 

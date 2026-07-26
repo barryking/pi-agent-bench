@@ -6,6 +6,7 @@ Keep case files in these places:
 evals/
   planning/                 small fake planning checks
   coding/                   small fake coding checks
+  starter/                  five owned, ready-to-run case pairs
   pilots/
     user-list-filter/       first real pilot
     user-idempotency/       harder real pilot
@@ -17,6 +18,10 @@ Each real pilot folder contains:
 - `planning.jsonl`;
 - `coding.jsonl`; and
 - a short README.
+
+The starter suite is the normal first benchmark. Its fixtures are committed
+under `fixtures/`, are covered by this project's MIT licence, and need no
+download.
 
 Starting repositories live under `repos/`. Real repositories are ignored by
 Git.

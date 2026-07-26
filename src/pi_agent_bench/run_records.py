@@ -183,6 +183,10 @@ def write_run_records(
                     "components": score_components,
                     "method": score_metadata.get("scoring_method"),
                     "success_threshold": threshold,
+                    "required_components": score_metadata.get(
+                        "required_components",
+                        [],
+                    ),
                     "grader_model": score_metadata.get("grader_model"),
                 },
                 "inspect_scores": {

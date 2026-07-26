@@ -266,7 +266,14 @@ def load_case_suite(
     if phase == "coding":
         for case in cases:
             _coding_assets(case, source)
-            _declared_score_components(case)
+            declared = set(_declared_score_components(case))
+            unknown_required = set(case.expected.required_components) - declared
+            if unknown_required:
+                raise ValueError(
+                    f"{case.id}: expected.required_components are not declared in "
+                    "metadata.score_components: "
+                    + ", ".join(sorted(unknown_required))
+                )
     else:
         for case in cases:
             if case.metadata.get("fixture"):
@@ -451,7 +458,7 @@ def _declared_score_components(case: GoldenCase) -> tuple[str, ...]:
 
 
 def _reject_draft_cases(cases: list[GoldenCase]) -> None:
-    drafts = [case.id for case in cases if case.metadata.get("draft") is True]
+    drafts = [case.id for case in cases if case.metadata.get("draft") is not False]
     if drafts:
         raise ValueError(
             "refusing to run draft case(s): "
@@ -484,6 +491,7 @@ def _case_metadata(case: GoldenCase) -> dict[str, Any]:
                 for criterion in case.expected.rubric
             ],
             "success_threshold": case.expected.success_threshold,
+            "required_components": list(case.expected.required_components),
         },
         **case.metadata,
     }
