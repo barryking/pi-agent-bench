@@ -7,6 +7,7 @@ name = "pi-agent-bench"
 version = "0.3.0"
 description = "Evaluate coding-agent workflows across local and hosted language models"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
   "inspect-ai==0.3.249",
