@@ -25,6 +25,7 @@ def outcome_case(case_id="outcome-1"):
         "metadata": {
             "dataset_version": "test-1",
             "starting_repository": f"starting-repos/{case_id}",
+            "score_components": ["requirements"],
             "draft": False,
             "synthetic": True,
         },

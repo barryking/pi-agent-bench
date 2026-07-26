@@ -10,8 +10,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from pi_agent_bench.workspace import remove_docker_workspace_contents
 from pi_agent_bench.versions import SANDBOX_IMAGE
+from pi_agent_bench.workspace import remove_docker_workspace_contents
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "evals" / "starter" / "cases.jsonl"
