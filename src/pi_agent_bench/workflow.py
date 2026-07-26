@@ -25,6 +25,10 @@ def initialize_workspace(
             REPOSITORY_ROOT / "configs" / "model-baselines.example.json",
             destination / "configs" / "model-baselines.local.json",
         ),
+        (
+            REPOSITORY_ROOT / "configs" / "agent-profiles.json",
+            destination / "configs" / "agent-profiles.local.json",
+        ),
     ]
     results: list[tuple[Path, str]] = []
     for source, target in files:

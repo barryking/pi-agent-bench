@@ -22,10 +22,13 @@ RUN_COLUMNS = [
     "phase",
     "trial_number",
     "profile",
+    "model_profile",
+    "agent_profile",
     "profile_kind",
     "model",
     "provider",
     "configuration_fingerprint",
+    "agent_configuration_fingerprint",
     "scoring_method",
     "success_threshold",
     "grader_model",
@@ -62,6 +65,7 @@ RUN_COLUMNS = [
     "inspect_log",
     "final_diff",
     "configuration_json",
+    "agent_configuration_json",
 ]
 
 
@@ -102,15 +106,24 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
         )
         profiles: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for record in cohort_records:
-            profile = record.get("model_configuration", {}).get("profile")
-            if not isinstance(profile, str) or not profile:
+            profile = _comparison_profile(record)
+            if not profile:
                 raise ValueError("run record is missing model_configuration.profile")
             profiles[profile].append(record)
         for profile, profile_records in profiles.items():
             fingerprints = {
-                record.get("model_configuration", {}).get("configuration_fingerprint")
+                (
+                    record.get("model_configuration", {}).get(
+                        "configuration_fingerprint"
+                    ),
+                    _agent_configuration(record).get(
+                        "configuration_fingerprint"
+                    ),
+                )
                 for record in profile_records
-                if record.get("model_configuration", {}).get("configuration_fingerprint")
+                if record.get("model_configuration", {}).get(
+                    "configuration_fingerprint"
+                )
             }
             if len(fingerprints) > 1:
                 raise ValueError(
@@ -134,7 +147,7 @@ def build_report(results_dir: str | Path) -> dict[str, Any]:
             },
         }
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "records": len(records),
         "cohorts": cohorts,
     }
@@ -216,6 +229,8 @@ def _profile_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
             ),
             None,
         ),
+        "model_profile": records[0].get("model_configuration", {}).get("profile"),
+        "agent_profile": _agent_configuration(records[0]).get("profile"),
         "runs": len(records),
         "cases": len(by_case),
         "successes": len(successes),
@@ -259,8 +274,30 @@ def _load_records(source: Path) -> list[dict[str, Any]]:
     ]
 
 
+def _agent_configuration(record: dict[str, Any]) -> dict[str, Any]:
+    value = record.get("agent_configuration")
+    if isinstance(value, dict) and value.get("profile"):
+        return value
+    return {
+        "profile": "vanilla",
+        "configuration": {},
+        "configuration_fingerprint": None,
+    }
+
+
+def _comparison_profile(record: dict[str, Any]) -> str:
+    model = record.get("model_configuration", {}).get("profile")
+    if not isinstance(model, str) or not model:
+        return ""
+    agent = _agent_configuration(record).get("profile")
+    if not isinstance(agent, str) or not agent or agent == "vanilla":
+        return model
+    return f"{model} + {agent}"
+
+
 def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
     profile = record.get("model_configuration", {})
+    agent_profile = _agent_configuration(record)
     harness = record.get("harness", {})
     agent = record.get("agent", {})
     usage = _usage(record)
@@ -277,7 +314,9 @@ def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
         "cache_state": record.get("cache_state", "unspecified"),
         "phase": record.get("phase"),
         "trial_number": record.get("trial_number"),
-        "profile": profile.get("profile"),
+        "profile": _comparison_profile(record),
+        "model_profile": profile.get("profile"),
+        "agent_profile": agent_profile.get("profile"),
         "profile_kind": profile.get("kind"),
         "model": profile.get("model") or record.get("inspect_model"),
         "provider": profile.get("configuration", {}).get(
@@ -288,6 +327,9 @@ def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
             ),
         ),
         "configuration_fingerprint": profile.get("configuration_fingerprint"),
+        "agent_configuration_fingerprint": agent_profile.get(
+            "configuration_fingerprint"
+        ),
         "scoring_method": record.get("score", {}).get("method"),
         "success_threshold": record.get("score", {}).get("success_threshold"),
         "grader_model": record.get("score", {}).get("grader_model"),
@@ -330,13 +372,18 @@ def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
             sort_keys=True,
             separators=(",", ":"),
         ),
+        "agent_configuration_json": json.dumps(
+            agent_profile.get("configuration", {}),
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
     }
 
 
 def _metric_rows(record: dict[str, Any]) -> list[dict[str, Any]]:
     flat = _flat_run(record)
     dimensions = {
-        "schema_version": 1,
+        "schema_version": 2,
         "synthetic": flat["synthetic"],
         "run_id": flat["run_id"],
         "case_id": flat["case_id"],
@@ -347,11 +394,17 @@ def _metric_rows(record: dict[str, Any]) -> list[dict[str, Any]]:
         "phase": flat["phase"],
         "trial_number": flat["trial_number"],
         "profile": flat["profile"],
+        "model_profile": flat["model_profile"],
+        "agent_profile": flat["agent_profile"],
         "profile_kind": flat["profile_kind"],
         "model": flat["model"],
         "provider": flat["provider"],
         "configuration_fingerprint": flat["configuration_fingerprint"],
+        "agent_configuration_fingerprint": flat[
+            "agent_configuration_fingerprint"
+        ],
         "configuration_json": flat["configuration_json"],
+        "agent_configuration_json": flat["agent_configuration_json"],
         "scoring_method": flat["scoring_method"],
         "success_threshold": flat["success_threshold"],
         "grader_model": flat["grader_model"],

@@ -13,25 +13,44 @@ This answers an important question:
 If strong cloud models keep failing, the case may be too large, unclear, or
 broken. Fix the case before blaming a local model.
 
-## 1. Check every profile
+## 1. Check every model and agent profile
 
-List the profiles:
+List the model profiles:
 
 ```bash
-pi-bench profiles \
-  --profiles configs/model-baselines.local.json
+pi-bench model-profiles \
+  --model-profiles-file configs/model-baselines.local.json
 ```
 
 Check each one:
 
 ```bash
 pi-bench doctor \
-  --profile hosted-quality \
-  --profiles configs/model-baselines.local.json \
+  --model-profile hosted-quality \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local
 ```
 
 Do not run a profile until `doctor` says it is ready.
+
+List agent profiles:
+
+```bash
+pi-bench agent-profiles \
+  --agent-profiles-file configs/agent-profiles.local.json
+```
+
+Use `vanilla` for model comparisons. If you are testing agent changes, check
+the chosen pair:
+
+```bash
+pi-bench doctor \
+  --model-profile hosted-quality \
+  --model-profiles-file configs/model-baselines.local.json \
+  --agent-profile team-agent \
+  --agent-profiles-file configs/agent-profiles.local.json \
+  --env-file .env.local
+```
 
 ## 2. Check the cases
 
@@ -72,10 +91,10 @@ For coding:
 
 ```bash
 pi-bench campaign coding \
-  --run-profile hosted-quality \
-  --run-profile hosted-cost \
+  --model-profile hosted-quality \
+  --model-profile hosted-cost \
   --dataset evals/starter/coding.jsonl \
-  --profiles configs/model-baselines.local.json \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --campaign case-check-v1 \
   --epochs 3 \
@@ -99,9 +118,9 @@ Use the same:
 
 ```bash
 pi-bench campaign coding \
-  --run-profile local-candidate \
+  --model-profile local-candidate \
   --dataset evals/starter/coding.jsonl \
-  --profiles configs/model-baselines.local.json \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --campaign case-check-v1 \
   --epochs 3 \
@@ -116,12 +135,12 @@ Planning needs a separate grader model:
 
 ```bash
 pi-bench campaign planning \
-  --run-profile hosted-quality \
-  --run-profile hosted-cost \
-  --run-profile local-candidate \
+  --model-profile hosted-quality \
+  --model-profile hosted-cost \
+  --model-profile local-candidate \
   --dataset evals/starter/planning.jsonl \
-  --grader-profile independent-grader \
-  --profiles configs/model-baselines.local.json \
+  --grader-model-profile independent-grader \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --campaign planning-check-v1 \
   --epochs 3 \
@@ -173,14 +192,35 @@ Look at several facts together:
 
 Do not choose a winner using one number alone.
 
+## Compare agent setup
+
+Agent changes can be tested with the same cases and model:
+
+```bash
+pi-bench campaign coding \
+  --model-profile hosted-quality \
+  --agent-profile vanilla \
+  --agent-profile team-agent \
+  --model-profiles-file configs/model-baselines.local.json \
+  --agent-profiles-file configs/agent-profiles.local.json \
+  --env-file .env.local \
+  --dataset evals/starter/coding.jsonl \
+  --campaign agent-check-v1 \
+  --epochs 3 \
+  --resume
+```
+
+The two model-and-agent pairs are separate comparison arms. Keep every other
+setting unchanged. Read [Agent profiles](agent-profiles.md).
+
 ## When ranking is allowed
 
 The dashboard only ranks models when:
 
 - at least two profiles are present;
-- every profile has the same shared cases;
+- every model-and-agent pair has the same shared cases;
 - at least five cases are shared;
-- every profile and case has at least three trials;
+- every model-and-agent pair and case has at least three trials;
 - the dataset version matches; and
 - the benchmark files match.
 
@@ -225,8 +265,8 @@ Re-grade planning:
 
 ```bash
 pi-bench rescore-planning logs/<planning-log>.eval \
-  --grader-profile independent-grader \
-  --profiles configs/model-baselines.local.json \
+  --grader-model-profile independent-grader \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local
 ```
 

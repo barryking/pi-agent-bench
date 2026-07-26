@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 
+from .agent_profiles import load_agent_profiles
 from .dataset import load_cases
 from .model_profiles import load_profiles
 from .versions import FRAMEWORK_VERSION, INSPECT_VERSION, PI_VERSION, SANDBOX_IMAGE
@@ -15,7 +16,10 @@ def _command_init(args: argparse.Namespace) -> None:
 
     for path, status in initialize_workspace(args.root):
         print(f"{status}: {path}")
-    print("next: edit .env.local and configs/model-baselines.local.json")
+    print(
+        "next: edit .env.local, configs/model-baselines.local.json, "
+        "and configs/agent-profiles.local.json"
+    )
 
 
 def _command_new_case(args: argparse.Namespace) -> None:
@@ -50,9 +54,31 @@ def _command_validate(args: argparse.Namespace) -> None:
     print(f"valid: {len(cases)} case(s); phases={','.join(phases)}")
 
 
-def _command_profiles(args: argparse.Namespace) -> None:
-    for profile in load_profiles(args.profiles).values():
+def _command_model_profiles(args: argparse.Namespace) -> None:
+    for profile in load_profiles(args.model_profiles_file).values():
         print(f"{profile.name}: {profile.kind}; model={profile.model}")
+
+
+def _command_agent_profiles(args: argparse.Namespace) -> None:
+    for profile in load_agent_profiles(args.agent_profiles_file).values():
+        print(
+            f"{profile.name}: planning-tools={','.join(profile.tools_for('planning'))}; "
+            f"coding-tools={','.join(profile.tools_for('coding'))}; "
+            f"resources={_agent_resource_count(profile)}"
+        )
+
+
+def _agent_resource_count(profile) -> int:
+    return sum(
+        len(resources)
+        for resources in (
+            profile.context_files,
+            profile.append_system_prompts,
+            profile.skills,
+            profile.extensions,
+            profile.prompt_templates,
+        )
+    ) + int(profile.system_prompt is not None)
 
 
 def _command_versions(_args: argparse.Namespace) -> None:

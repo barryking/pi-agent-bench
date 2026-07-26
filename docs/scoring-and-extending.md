@@ -287,8 +287,8 @@ Check it:
 
 ```bash
 pi-bench doctor \
-  --profile <profile-name> \
-  --profiles configs/model-baselines.local.json \
+  --model-profile <model-profile-name> \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local
 ```
 

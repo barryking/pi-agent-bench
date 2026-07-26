@@ -17,3 +17,4 @@ repos/*
 !repos/README.md
 .env.local
 configs/*.local.json
+.agent-resources/

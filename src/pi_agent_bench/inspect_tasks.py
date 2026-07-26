@@ -11,6 +11,7 @@ from inspect_ai import Task, task
 from inspect_ai.dataset import Sample
 from inspect_ai.model import Model
 
+from pi_agent_bench.agent_profiles import AgentProfile, vanilla_agent_profile
 from pi_agent_bench.dataset import GoldenCase, load_cases
 from pi_agent_bench.inspect_agent import configure_pi_case, pi_agent
 from pi_agent_bench.inspect_scorers import (
@@ -33,6 +34,8 @@ def planning_suite(
     direct_model: str | None = None,
     direct_auth_file: str | None = None,
     thinking_level: str | None = None,
+    agent_profile: AgentProfile | None = None,
+    agent_runtime_env: dict[str, str] | None = None,
 ) -> Task:
     source, cases, version = load_case_suite(dataset, "planning")
     _reject_draft_cases(cases)
@@ -47,6 +50,8 @@ def planning_suite(
         direct_model=direct_model,
         direct_auth_file=direct_auth_file,
         thinking_level=thinking_level,
+        agent_profile=agent_profile,
+        agent_runtime_env=agent_runtime_env,
     )
 
 
@@ -58,6 +63,8 @@ def planning_tasks(
     direct_model: str | None = None,
     direct_auth_file: str | None = None,
     thinking_level: str | None = None,
+    agent_profile: AgentProfile | None = None,
+    agent_runtime_env: dict[str, str] | None = None,
 ) -> list[Task]:
     """Build exact-limit tasks, splitting a mixed-limit planning dataset."""
     source, cases, version = load_case_suite(dataset, "planning")
@@ -74,6 +81,8 @@ def planning_tasks(
             direct_model=direct_model,
             direct_auth_file=direct_auth_file,
             thinking_level=thinking_level,
+            agent_profile=agent_profile,
+            agent_runtime_env=agent_runtime_env,
             name=_task_group_name("planning", limits),
         )
         for limits, group in _limit_groups(cases)
@@ -92,8 +101,11 @@ def _planning_task(
     direct_model: str | None = None,
     direct_auth_file: str | None = None,
     thinking_level: str | None = None,
+    agent_profile: AgentProfile | None = None,
+    agent_runtime_env: dict[str, str] | None = None,
     name: str | None = None,
 ) -> Task:
+    selected_agent = agent_profile or vanilla_agent_profile()
     seconds, turns, total_tokens = limits
     rubric_components = sorted(
         {criterion.id for case in cases for criterion in case.expected.rubric}
@@ -111,6 +123,8 @@ def _planning_task(
                 direct_model=direct_model,
                 direct_auth_file=direct_auth_file,
                 thinking_level=thinking_level,
+                agent_profile=selected_agent,
+                agent_runtime_env=agent_runtime_env,
             ),
         ],
         scorer=(
@@ -130,6 +144,7 @@ def _planning_task(
             "dataset_path": str(source),
             "case_limits": _limits_metadata(limits),
             "evaluated_model": evaluated_model,
+            "agent_profile": selected_agent.public_identity(),
         },
     )
 
@@ -141,6 +156,8 @@ def coding_suite(
     direct_model: str | None = None,
     direct_auth_file: str | None = None,
     thinking_level: str | None = None,
+    agent_profile: AgentProfile | None = None,
+    agent_runtime_env: dict[str, str] | None = None,
 ) -> Task:
     source, cases, version = load_case_suite(dataset, "coding")
     _reject_draft_cases(cases)
@@ -154,6 +171,8 @@ def coding_suite(
         direct_model=direct_model,
         direct_auth_file=direct_auth_file,
         thinking_level=thinking_level,
+        agent_profile=agent_profile,
+        agent_runtime_env=agent_runtime_env,
     )
 
 
@@ -163,6 +182,8 @@ def coding_tasks(
     direct_model: str | None = None,
     direct_auth_file: str | None = None,
     thinking_level: str | None = None,
+    agent_profile: AgentProfile | None = None,
+    agent_runtime_env: dict[str, str] | None = None,
 ) -> list[Task]:
     """Build exact-limit tasks, splitting a mixed-limit coding dataset."""
     source, cases, version = load_case_suite(dataset, "coding")
@@ -177,6 +198,8 @@ def coding_tasks(
             direct_model=direct_model,
             direct_auth_file=direct_auth_file,
             thinking_level=thinking_level,
+            agent_profile=agent_profile,
+            agent_runtime_env=agent_runtime_env,
             name=_task_group_name("coding", limits),
         )
         for limits, group in _limit_groups(cases)
@@ -193,8 +216,11 @@ def _coding_task(
     direct_model: str | None = None,
     direct_auth_file: str | None = None,
     thinking_level: str | None = None,
+    agent_profile: AgentProfile | None = None,
+    agent_runtime_env: dict[str, str] | None = None,
     name: str | None = None,
 ) -> Task:
+    selected_agent = agent_profile or vanilla_agent_profile()
     seconds, turns, total_tokens = limits
     score_components = sorted(
         {
@@ -213,6 +239,8 @@ def _coding_task(
                 direct_model=direct_model,
                 direct_auth_file=direct_auth_file,
                 thinking_level=thinking_level,
+                agent_profile=selected_agent,
+                agent_runtime_env=agent_runtime_env,
             ),
         ],
         scorer=coding_verifier_scorer(score_components),
@@ -226,6 +254,7 @@ def _coding_task(
         metadata={
             "dataset_path": str(source),
             "case_limits": _limits_metadata(limits),
+            "agent_profile": selected_agent.public_identity(),
         },
     )
 

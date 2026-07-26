@@ -20,6 +20,7 @@ This repository provides:
 
 - cases;
 - model profiles;
+- agent profiles;
 - protected verifiers;
 - small result records; and
 - the comparison dashboard.
@@ -32,6 +33,7 @@ The Python package is under `src/pi_agent_bench/`.
 - `cli_parser.py` describes command-line options.
 - `cli_commands.py` handles setup, cases, exports, and reports.
 - `cli_execution.py` checks models and starts Inspect runs.
+- `agent_profiles.py` checks and fingerprints selected Pi resources.
 - `inspect_tasks.py`, `inspect_agent.py`, and `inspect_scorers.py` are the
   Inspect integration.
 - `verification.py` reads scores and protected verifier output.
@@ -64,6 +66,10 @@ Pi is the coding agent being tested.
 Pi reads files, asks the model questions, uses tools, and changes code. We use
 the real Pi loop instead of making a smaller copy of it.
 
+An agent profile chooses Pi's tools and optional resources. A model profile
+chooses the inference model. Keeping them separate lets one model be tested
+with several agent setups.
+
 ### Docker
 
 Every trial gets a clean Docker container.
@@ -87,6 +93,9 @@ The model may run:
 - through a Pi subscription login.
 
 Changing the profile changes the model route. It does not change the case.
+
+Changing the agent profile changes Pi's tools or instructions. It does not
+change the model.
 
 ## Normal model route
 
@@ -121,13 +130,14 @@ used to count turns and tokens.
 ```text
 1. Load one case.
 2. Copy the starting files.
-3. Start a clean container and Pi session.
-4. Connect Pi to one model.
-5. Let Pi work until it finishes or reaches a limit.
-6. Run the protected verifier or planning grader.
-7. Save the full Inspect log.
-8. Save the small result record and code diff.
-9. Remove the container.
+3. Copy only the chosen agent-profile resources into a new Pi home.
+4. Start a clean container and Pi session.
+5. Connect Pi to one model.
+6. Let Pi work until it finishes or reaches a limit.
+7. Run the protected verifier or planning grader.
+8. Save the full Inspect log.
+9. Save the small result record and code diff.
+10. Remove the container.
 ```
 
 ## Planning and coding stay separate
@@ -194,6 +204,9 @@ The host fixture is not changed.
 - Protected verifiers are outside the AI-readable workspace.
 - Verifiers run only after Pi stops.
 - Personal Pi skills and sessions are disabled.
+- Pi update checks and package downloads are disabled during trials.
+- Only resources named by the agent profile can be added.
+- Agent resource contents and secrets are not written into result records.
 - Private credentials are not written into results.
 - The DGX receives model text, not a mounted Mac filesystem.
 - Public examples must not contain private company data.

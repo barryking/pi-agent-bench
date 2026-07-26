@@ -15,7 +15,7 @@ from pi_agent_bench.workspace import remove_docker_workspace_contents
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "evals" / "starter" / "coding.jsonl"
 SOLUTIONS = ROOT / "tests" / "starter_solutions"
-IMAGE = "pi-agent-bench-sandbox:0.4.0"
+IMAGE = "pi-agent-bench-sandbox:0.5.0"
 
 
 def run(command: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:

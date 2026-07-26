@@ -11,6 +11,7 @@ def test_init_creates_local_files_without_overwriting(tmp_path):
     first = initialize_workspace(tmp_path)
     env = tmp_path / ".env.local"
     profiles = tmp_path / "configs" / "model-baselines.local.json"
+    agent_profiles = tmp_path / "configs" / "agent-profiles.local.json"
 
     assert {status for _, status in first} == {"created"}
     env.write_text("USER_VALUE=kept\n", encoding="utf-8")
@@ -20,6 +21,7 @@ def test_init_creates_local_files_without_overwriting(tmp_path):
     assert {status for _, status in second} == {"kept"}
     assert env.read_text(encoding="utf-8") == "USER_VALUE=kept\n"
     assert profiles.is_file()
+    assert agent_profiles.is_file()
 
 
 @pytest.mark.parametrize("phase", ["planning", "coding"])

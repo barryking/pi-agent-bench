@@ -20,10 +20,9 @@ def write_record(
     cost,
     phase="coding",
     dataset_version="1",
+    agent_profile=None,
 ):
-    path.write_text(
-        json.dumps(
-            {
+    record = {
                 "schema_version": 1,
                 "run_id": f"run-{profile}",
                 "case_id": "case-1",
@@ -76,9 +75,13 @@ def write_record(
                 "verifier": {"return_code": 0},
                 "artifacts": {"inspect_log": "logs/example.eval"},
             }
-        ),
-        encoding="utf-8",
-    )
+    if agent_profile:
+        record["agent_configuration"] = {
+            "profile": agent_profile,
+            "configuration": {"tools": {"coding": ["read"]}},
+            "configuration_fingerprint": f"agent-{agent_profile}",
+        }
+    path.write_text(json.dumps(record), encoding="utf-8")
 
 
 def test_builds_profile_comparison_report(tmp_path):
@@ -107,7 +110,7 @@ def test_builds_profile_comparison_report(tmp_path):
     markdown, summary_json = write_report(report, tmp_path / "summary.md")
 
     [cohort] = report["cohorts"].values()
-    assert report["schema_version"] == 3
+    assert report["schema_version"] == 4
     assert cohort["profiles"]["dgx"]["success_rate"] == 1.0
     assert cohort["profiles"]["dgx"]["provider_reported_total_cost"] is None
     assert cohort["profiles"]["hosted-quality"]["provider_reported_total_cost"] == 0.25
@@ -156,7 +159,7 @@ def test_writes_visualizer_friendly_wide_and_long_exports(tmp_path):
         "tokens.total",
         "agent.tool_calls",
     }
-    assert {row["schema_version"] for row in metrics} == {1}
+    assert {row["schema_version"] for row in metrics} == {2}
     assert {row["started_at"] for row in metrics} == {"2026-07-25T12:00:00Z"}
 
 
@@ -191,6 +194,44 @@ def test_report_never_aggregates_planning_and_coding(tmp_path):
     by_phase = {cohort["phase"]: cohort for cohort in report["cohorts"].values()}
     assert by_phase["planning"]["profiles"]["dgx"]["mean_quality_score"] == 0
     assert by_phase["coding"]["profiles"]["dgx"]["mean_quality_score"] == 1
+
+
+def test_report_compares_agent_setups_on_the_same_model(tmp_path):
+    write_record(
+        tmp_path / "vanilla.json",
+        profile="same-model",
+        agent_profile="vanilla",
+        success=True,
+        score=1.0,
+        wall=20,
+        input_tokens=100,
+        output_tokens=20,
+        cost=None,
+    )
+    write_record(
+        tmp_path / "guided.json",
+        profile="same-model",
+        agent_profile="team-tools",
+        success=True,
+        score=0.9,
+        wall=10,
+        input_tokens=80,
+        output_tokens=15,
+        cost=None,
+    )
+
+    report = build_report(tmp_path)
+
+    [cohort] = report["cohorts"].values()
+    assert set(cohort["profiles"]) == {
+        "same-model",
+        "same-model + team-tools",
+    }
+    assert cohort["profiles"]["same-model"]["agent_profile"] == "vanilla"
+    assert (
+        cohort["profiles"]["same-model + team-tools"]["agent_profile"]
+        == "team-tools"
+    )
 
 
 def test_report_keeps_campaigns_and_cache_states_separate(tmp_path):

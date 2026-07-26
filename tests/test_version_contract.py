@@ -99,6 +99,8 @@ def test_result_record_contains_actual_harness_and_model_versions(tmp_path):
     assert record["cache_state"] == "warm"
     assert record["harness"]["benchmark_fingerprint"]
     assert record["model_configuration"]["configuration_fingerprint"]
+    assert record["agent_configuration"]["profile"] == "vanilla"
+    assert record["agent_configuration"]["configuration_fingerprint"]
     assert record["timing"]["inspect_working_seconds"] == 3.0
     assert record["timing"]["model_working_seconds"] == 2.0
     assert record["timing"]["tool_working_seconds"] == 0.5

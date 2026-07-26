@@ -15,6 +15,9 @@ Before changing how the framework works, read:
 4. `docs/scoring-and-extending.md`
 5. `docs/roadmap.md`
 
+Read `docs/agent-profiles.md` too when changing Pi tools, instructions, skills,
+extensions, prompt templates, settings, or MCP support.
+
 These pages describe the choices the project has made. If the code proves that
 a choice is wrong, update the page as part of the same change.
 
@@ -24,7 +27,8 @@ a choice is wrong, update the page as part of the same change.
 - Keep planning tests and coding tests separate.
 - For coding, prefer repeatable tests over asking another model to judge.
 - Run every agent in a new throw-away workspace.
-- Record the model, model version, server, harness, Pi, and dataset versions.
+- Record the model, model version, server, agent profile, harness, Pi, and
+  dataset versions.
 - Do not say a feature works until an automated test has checked it.
 - Keep special provider behaviour in a small adapter.
 - Keep `docs/roadmap.md` honest when work is completed or added.
@@ -42,6 +46,7 @@ pi-bench validate evals/starter/planning.jsonl
 pi-bench validate evals/starter/coding.jsonl
 pi-bench versions
 python scripts/check-starter-verifiers.py
+python scripts/check-agent-profile-examples.py
 ```
 
 `ruff` is installed by `.[dev]`. It checks Python code for common

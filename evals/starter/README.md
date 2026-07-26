@@ -29,8 +29,8 @@ Start with one cloud profile:
 ```bash
 pi-bench run coding \
   --dataset evals/starter/coding.jsonl \
-  --profile hosted-quality \
-  --profiles configs/model-baselines.local.json \
+  --model-profile hosted-quality \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --campaign starter-check
 ```
@@ -40,9 +40,9 @@ Use three trials per model for a comparison:
 ```bash
 pi-bench campaign coding \
   --dataset evals/starter/coding.jsonl \
-  --run-profile hosted-quality \
-  --run-profile local-candidate \
-  --profiles configs/model-baselines.local.json \
+  --model-profile hosted-quality \
+  --model-profile local-candidate \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --campaign starter-baseline-v1 \
   --epochs 3 \

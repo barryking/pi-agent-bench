@@ -24,6 +24,9 @@ Pi Agent Bench records:
 - success across repeated trials; and
 - how steady the result is.
 
+The dashboard treats one model-and-agent pair as one comparison arm. For
+example, `model-a + team-agent` stays separate from `model-a` using vanilla Pi.
+
 Inspect also calculates:
 
 - the average;
@@ -160,6 +163,10 @@ results/metrics.jsonl
 
 This is one metric fact on each line. It is easy for chart and database tools
 to read.
+
+Every line includes both `model_profile` and `agent_profile`. It also includes
+safe configuration hashes. This lets another chart tool compare the same model
+with different tools or instructions.
 
 ## Dashboard charts
 

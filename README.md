@@ -9,8 +9,9 @@ It can compare:
 - a cloud model paid for by API use; and
 - a cloud model used through a subscription.
 
-Every model gets the same task, tools, time, and tests. This makes the result
-as fair as we can make it.
+Every model gets the same task, agent setup, time, and tests. This makes the
+result as fair as we can make it. You can also keep the model fixed and compare
+different agent setups.
 
 Inspect is the evaluation framework. This repository does not replace it.
 
@@ -42,7 +43,9 @@ answers model requests. It does not receive your whole Mac filesystem.
 - **Case:** one task for the AI.
 - **Fixture:** the starting files for a coding case.
 - **Verifier:** protected code that checks the result.
-- **Profile:** the name and settings for one model.
+- **Model profile:** which model answers Pi, plus its inference settings.
+- **Agent profile:** Pi's tools, instructions, skills, extensions, and other
+  agent setup.
 - **Trial:** one attempt at one case.
 - **Campaign:** a group of trials that should be compared.
 - **Inspect log:** the full record of what happened.
@@ -120,9 +123,18 @@ pi-bench init
 Edit:
 
 - `.env.local` for secret keys and private addresses;
-- `configs/model-baselines.local.json` for model names and settings.
+- `configs/model-baselines.local.json` for model names and settings; and
+- `configs/agent-profiles.local.json` when you want to test a changed Pi setup.
 
 Do not put a secret key directly in the JSON file.
+
+The command names say whether you are choosing one profile or pointing at its
+file:
+
+- `--model-profile` chooses one model setup by name.
+- `--model-profiles-file` points at the file containing model setups.
+- `--agent-profile` chooses one Pi setup by name.
+- `--agent-profiles-file` points at the file containing Pi setups.
 
 The example config has places for:
 
@@ -137,14 +149,43 @@ Check a model before using it:
 
 ```bash
 pi-bench doctor \
-  --profile local-candidate \
-  --profiles configs/model-baselines.local.json \
+  --model-profile local-candidate \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local
 ```
 
 If it says `ready`, the model can be used.
 
 For a DGX server, follow [DGX setup](docs/setup-dgx.md).
+
+## Configure Pi
+
+The default agent profile is `vanilla`. It gives Pi fixed tools and no personal
+instructions, skills, extensions, prompt templates, or MCP servers.
+
+An agent profile can deliberately add:
+
+- `AGENTS.md` instructions;
+- a replacement or extra system prompt;
+- skills;
+- extensions and their tools;
+- prompt templates;
+- Pi settings; and
+- MCP servers used through a chosen Pi extension.
+
+List the profiles:
+
+```bash
+pi-bench agent-profiles
+```
+
+Use `configs/agent-profiles.local.json` for private profiles. Each selected
+file is copied into the clean container and hashed. Your normal Pi home is
+never copied.
+
+Read [Agent profiles](docs/agent-profiles.md) for a small example.
+The [runnable examples](examples/agent-profiles/README.md) include an owned
+skill, extension tool, prompt template, and MCP client plus server.
 
 ## Run your first campaign
 
@@ -156,9 +197,9 @@ before you test a local model:
 
 ```bash
 pi-bench campaign coding \
-  --run-profile openai-codex-gpt-5.6-sol \
-  --run-profile openai-codex-gpt-5.6-luna \
-  --profiles configs/model-baselines.local.json \
+  --model-profile openai-codex-gpt-5.6-sol \
+  --model-profile openai-codex-gpt-5.6-luna \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --dataset evals/starter/coding.jsonl \
   --campaign starter-coding-baseline-v1 \
@@ -173,8 +214,8 @@ Next, run the same cases against the local model:
 
 ```bash
 pi-bench campaign coding \
-  --run-profile local-candidate \
-  --profiles configs/model-baselines.local.json \
+  --model-profile local-candidate \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --dataset evals/starter/coding.jsonl \
   --campaign starter-coding-baseline-v1 \
@@ -189,11 +230,11 @@ For planning and coding together:
 
 ```bash
 pi-bench campaign all \
-  --run-profile openai-codex-gpt-5.6-sol \
-  --run-profile openai-codex-gpt-5.6-luna \
-  --run-profile local-candidate \
-  --grader-profile independent-grader \
-  --profiles configs/model-baselines.local.json \
+  --model-profile openai-codex-gpt-5.6-sol \
+  --model-profile openai-codex-gpt-5.6-luna \
+  --model-profile local-candidate \
+  --grader-model-profile independent-grader \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --planning-dataset evals/starter/planning.jsonl \
   --coding-dataset evals/starter/coding.jsonl \
@@ -203,6 +244,29 @@ pi-bench campaign all \
 ```
 
 The grader must be a different model from every model it grades.
+
+### Compare two Pi setups
+
+Keep the model fixed and repeat `--agent-profile`:
+
+```bash
+pi-bench campaign coding \
+  --model-profile hosted-quality \
+  --agent-profile vanilla \
+  --agent-profile team-agent \
+  --model-profiles-file configs/model-baselines.local.json \
+  --agent-profiles-file configs/agent-profiles.local.json \
+  --env-file .env.local \
+  --dataset evals/starter/coding.jsonl \
+  --campaign agent-profile-check-v1 \
+  --epochs 3 \
+  --resume
+```
+
+The dashboard shows `hosted-quality` and
+`hosted-quality + team-agent` as separate choices. This makes changes in tools,
+context, skills, and extensions visible without pretending they are different
+models.
 
 ## See the results
 
@@ -363,8 +427,8 @@ Re-grade a planning log with another grader:
 
 ```bash
 pi-bench rescore-planning logs/<planning-log>.eval \
-  --grader-profile independent-grader \
-  --profiles configs/model-baselines.local.json \
+  --grader-model-profile independent-grader \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local
 ```
 
@@ -392,6 +456,10 @@ fixture.
 
 Broken attempts do not enter rankings.
 Inspect logs are the source of truth.
+
+Each result also records the model profile, agent profile, and safe hashes of
+the selected agent resources. Secret values and file contents are not copied
+into result records.
 
 ## Fair comparison rules
 
@@ -432,6 +500,7 @@ Do not commit:
 - [Clean Mac setup](docs/setup-mac.md)
 - [DGX setup](docs/setup-dgx.md)
 - [Running evaluations](docs/running-evaluations.md)
+- [Agent profiles](docs/agent-profiles.md)
 - [Scoring and making cases](docs/scoring-and-extending.md)
 - [Metrics](docs/metrics.md)
 - [Architecture](docs/architecture.md)

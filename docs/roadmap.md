@@ -38,6 +38,19 @@ Checked boxes are done. Empty boxes are still needed.
 - [ ] Record cold and warm local runs
 - [ ] Fully check direct subscription limits on a real coding run
 
+## Agent profiles
+
+- [x] Keep model and agent profiles separate
+- [x] Keep vanilla Pi as the clean default
+- [x] Select and hash context, prompts, skills, extensions, and templates
+- [x] Select tools and Pi settings by profile
+- [x] Pass secret environment values without recording them
+- [x] Support MCP through a selected Pi extension
+- [x] Compare several model-and-agent pairs in one campaign
+- [x] Add owned examples for guidance, skills, extensions, prompts, and MCP
+- [x] Prove the owned examples in a real Pi Docker trial
+- [ ] Run a real three-trial agent-profile comparison
+
 ## Cases
 
 - [x] Add safe case scaffolding

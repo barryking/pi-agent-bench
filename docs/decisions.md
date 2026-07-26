@@ -27,12 +27,35 @@ Every trial gets new files, a new Pi home, and a new session.
 
 Why: one trial must not change another trial.
 
-## Turn off personal Pi extras
+## Make agent setup an explicit profile
 
 Skills, extensions, prompt templates, themes, context files, and old sessions
-are disabled.
+from a person's normal Pi setup are disabled.
 
 Why: a personal extra would make the comparison unfair.
+
+The `vanilla` agent profile adds nothing. Other named profiles may add exact
+tools, context, prompts, skills, extensions, settings, or MCP details. Selected
+files are hashed and recorded.
+
+Why: agent setup can change speed and quality. We need to test it on purpose,
+not let it leak into a run by accident.
+
+## Keep model and agent profiles separate
+
+A model profile chooses the provider, model, reasoning setting, and inference
+facts. An agent profile chooses Pi's behaviour and resources.
+
+Why: one model can then be compared with vanilla Pi, a skill, or a tool without
+pretending these are different models.
+
+## Use an extension for MCP
+
+Pi has no built-in general MCP client. An agent profile can include a chosen Pi
+extension and safe MCP server details.
+
+Why: this follows Pi's extension design and avoids adding a second tool system
+to Pi Agent Bench.
 
 ## Let Inspect control normal model settings
 
@@ -130,9 +153,12 @@ Why: a model should not rank higher just because it skipped hard cases.
 
 ## Use the same harness for every model
 
-Compared models use the same Pi, tools, cases, limits, and Docker image.
+Compared models use the same Pi, agent profile, cases, limits, and Docker image.
 
 Why: otherwise we cannot tell whether the model caused the difference.
+
+When the agent profile is the thing being tested, keep the model profile and
+all other facts the same.
 
 ## Start with a 128K model profile
 

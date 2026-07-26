@@ -154,14 +154,23 @@
         const delta = pairedQualityDelta(rows, profile, baseline);
         const ranks = trialRanks(rows, profile);
         const configuration = profileRows.find(row => row.configuration_json)?.configuration_json;
+        const agentConfiguration =
+          profileRows.find(row => row.agent_configuration_json)?.agent_configuration_json;
+        const agentProfile =
+          profileRows.find(row => row.agent_profile)?.agent_profile || "vanilla";
         return {
           profile,
           kind: profileRows.find(row => row.profile_kind)?.profile_kind || "unspecified",
           model: profileRows.find(row => row.model)?.model || "model identity unavailable",
           provider: profileRows.find(row => row.provider)?.provider || "unreported",
-          configuration: configuration ? compactConfiguration(configuration) : "unreported",
+          configuration:
+            `model: ${configuration ? compactConfiguration(configuration) : "unreported"}; ` +
+            `agent (${agentProfile}): ${agentConfiguration ? compactConfiguration(agentConfiguration) : "unreported"}`,
           configurationFingerprint:
             profileRows.find(row => row.configuration_fingerprint)?.configuration_fingerprint,
+          agentConfigurationFingerprint:
+            profileRows.find(row => row.agent_configuration_fingerprint)
+              ?.agent_configuration_fingerprint,
           cases: unique(quality.map(row => row.case_id)).length,
           rawCases: unique(metricRows(
             state.rawCohort.filter(row => row.profile === profile),
@@ -217,9 +226,9 @@
       ));
       const minimumTrials = counts.length ? Math.min(...counts) : 0;
       const missing = [];
-      if (profiles.length < 2) missing.push(`${2 - profiles.length} more profile`);
+      if (profiles.length < 2) missing.push(`${2 - profiles.length} more setup`);
       if (cases.length < 5) missing.push(`${5 - cases.length} more shared case`);
-      if (minimumTrials < 3) missing.push(`${3 - minimumTrials} more trial per profile/case`);
+      if (minimumTrials < 3) missing.push(`${3 - minimumTrials} more trial per setup/case`);
       if (!$("common-only").checked && !state.sameCoverage) missing.push("identical case coverage");
       if (unique(state.cohort.map(row => row.benchmark_fingerprint)).length > 1) {
         missing.push("one benchmark fingerprint");
@@ -239,9 +248,9 @@
       const readiness = comparisonReadiness(cases, profileNames);
       $("data-badge").textContent = synthetic ? "SYNTHETIC DEMO" : (readiness.ready ? "COMPARABLE" : "INSUFFICIENT EVIDENCE");
       $("data-notice").textContent = synthetic
-        ? `${profiles} illustrative local and cloud profiles across ${cases.length} shared cases and ${trials} samples. Values are generated examples, not benchmark results.`
+        ? `${profiles} illustrative model-and-agent setups across ${cases.length} shared cases and ${trials} samples. Values are generated examples, not benchmark results.`
         : readiness.ready
-          ? `${profiles} profiles, ${cases.length} identical cases and at least ${readiness.minimumTrials} trials per profile/case. Ranking is enabled.`
+          ? `${profiles} setups, ${cases.length} identical cases and at least ${readiness.minimumTrials} trials per setup/case. Ranking is enabled.`
           : `Ranking is disabled: needs ${readiness.missing.join(", ")}.`;
       if (synthetic && !readiness.ready) {
         $("data-notice").textContent += ` Ranking disabled: needs ${readiness.missing.join(", ")}.`;
@@ -272,6 +281,6 @@
           <td class="number">${formatMetric(summary.tokensPerSuccess, "tokens")}</td>
           <td class="number">${formatMetric(summary.observedTokensPerSecond, "tokens/second")}</td>
           <td class="number">${formatMetric(summary.costPerSuccess, summary.costUnit)}</td>
-          <td class="model">${escapeHtml(summary.configuration)}<small>${escapeHtml((summary.configurationFingerprint || "unreported").slice(0, 12))}</small></td>
+          <td class="model">${escapeHtml(summary.configuration)}<small>model ${escapeHtml((summary.configurationFingerprint || "unreported").slice(0, 12))} · agent ${escapeHtml((summary.agentConfigurationFingerprint || "unreported").slice(0, 12))}</small></td>
         </tr>`).join("") : `<tr><td colspan="16"><div class="empty">No comparable results in this cohort.</div></td></tr>`;
     }
