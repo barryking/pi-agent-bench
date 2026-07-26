@@ -23,16 +23,24 @@ Inspect is the evaluation framework. This repository does not replace it.
 
 ## The big picture
 
-```text
-Your Mac
-  └─ Inspect AI starts a clean Docker container
-       └─ Pi reads the task and works on the code
-            └─ Pi asks one chosen model for help
+```mermaid
+sequenceDiagram
+    participant Mac as Pi Agent Bench on the Mac
+    participant Inspect as Inspect: runs, logs, and scores
+    participant Box as Docker: clean workspace
+    participant Pi as Pi: coding agent
+    participant Model as Model: cloud or local
 
-After the work:
-  ├─ protected tests check the answer
-  ├─ Inspect saves the full story of the run
-  └─ Pi Agent Bench saves small files for charts and comparisons
+    Mac->>Inspect: Start a benchmark
+    Inspect->>Box: Start a clean trial
+    Box->>Pi: Give Pi the task and code
+    Pi->>Model: Ask for a response
+    Model-->>Pi: Return a response
+    Pi->>Box: Read, edit, and test the code
+    Box->>Box: Run the protected verifier
+    Box-->>Inspect: Send the outcome and score
+    Inspect-->>Mac: Save the full run log and score
+    Mac->>Mac: Build the comparison dashboard
 ```
 
 The Mac starts the benchmark and stores the results. Protected tests run in
