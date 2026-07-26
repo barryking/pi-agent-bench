@@ -153,11 +153,10 @@ def write_run_records(
             )
             timing = _inspect_timing(sample)
             record = {
-                "schema_version": 2,
+                "schema_version": 3,
                 "run_id": log.eval.run_id,
                 "case_id": str(sample.id),
                 "dataset_version": log.eval.task_version,
-                "phase": sample.metadata.get("phase"),
                 "trial_number": sample.epoch,
                 "campaign": campaign,
                 "cache_state": cache_state,
@@ -197,7 +196,6 @@ def write_run_records(
                         "required_components",
                         [],
                     ),
-                    "grader_model": score_metadata.get("grader_model"),
                 },
                 "inspect_scores": {
                     name: {
@@ -245,13 +243,11 @@ def _write_invalid_record(
     invalid_dir.mkdir(parents=True, exist_ok=True)
     sample_id = str(sample.id) if sample is not None else "log"
     epoch = getattr(sample, "epoch", 0)
-    path = invalid_dir / (
-        f"{log.eval.run_id}__{sample_id}__trial-{epoch}.invalid.json"
-    )
+    path = invalid_dir / (f"{log.eval.run_id}__{sample_id}__trial-{epoch}.invalid.json")
     path.write_text(
         json.dumps(
             {
-                "schema_version": 2,
+                "schema_version": 3,
                 "run_id": log.eval.run_id,
                 "case_id": sample_id if sample is not None else None,
                 "trial_number": epoch if sample is not None else None,
@@ -291,11 +287,7 @@ def _score_success(value: Any, quality: float, threshold: Any) -> bool:
 
 
 def _score_components(value: Any, metadata_components: Any) -> dict[str, Any]:
-    components = (
-        dict(metadata_components)
-        if isinstance(metadata_components, dict)
-        else {}
-    )
+    components = dict(metadata_components) if isinstance(metadata_components, dict) else {}
     if isinstance(value, dict):
         for name, component in value.items():
             if name.startswith("component."):

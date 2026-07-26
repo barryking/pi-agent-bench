@@ -17,11 +17,14 @@ from inspect_ai.model import (
 from inspect_ai.tool import ToolCall
 
 from pi_agent_bench.agent_profiles import load_agent_profiles
-from pi_agent_bench.inspect_tasks import coding_tasks
+from pi_agent_bench.inspect_tasks import outcome_tasks
+from pi_agent_bench.model_profiles import ModelProfile
+from pi_agent_bench.reporting import build_report, write_visualizer_exports
+from pi_agent_bench.run_records import write_run_records
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_PROFILES = ROOT / "examples" / "agent-profiles" / "agent-profiles.example.json"
-SAMPLE_DATASET = ROOT / "evals" / "coding" / "sample.jsonl"
+SAMPLE_DATASET = ROOT / "evals" / "sample" / "cases.jsonl"
 
 
 def assistant_tool_calls() -> ModelOutput:
@@ -101,7 +104,7 @@ def main() -> int:
             memoize=False,
         )
         logs = inspect_eval(
-            coding_tasks(
+            outcome_tasks(
                 dataset=str(dataset),
                 agent_profile=agent_profile,
                 agent_runtime_env={},
@@ -113,6 +116,27 @@ def main() -> int:
         )
         if not logs or any(str(log.status) != "success" for log in logs):
             raise RuntimeError("owned agent-profile integration run did not finish")
+        results = temporary / "results"
+        records = write_run_records(
+            logs,
+            results,
+            ModelProfile(
+                name="scripted-integration",
+                kind="hosted",
+                model="mockllm/model",
+                runtime_env={},
+                configuration={"provider": "Inspect scripted model"},
+            ),
+            agent_profile=agent_profile,
+            campaign="ci",
+            cache_state="cold",
+        )
+        report = build_report(results)
+        runs_csv, metrics_jsonl = write_visualizer_exports(results)
+        if len(records) != 1 or report["records"] != 1:
+            raise RuntimeError("integration run did not create one dashboard record")
+        if not runs_csv.is_file() or not metrics_jsonl.is_file():
+            raise RuntimeError("integration run did not create visualizer exports")
 
     missing = [name for name, observed in observations.items() if not observed]
     if missing:
@@ -122,6 +146,7 @@ def main() -> int:
     print("proved: the prompt template expanded before the model call")
     print("proved: the owned extension tool ran")
     print("proved: the owned MCP extension called its stdio server")
+    print("proved: Inspect logs became dashboard records and visualizer exports")
     return 0
 
 

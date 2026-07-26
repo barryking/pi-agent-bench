@@ -11,11 +11,12 @@ from pathlib import Path
 from typing import Any
 
 from pi_agent_bench.workspace import remove_docker_workspace_contents
+from pi_agent_bench.versions import SANDBOX_IMAGE
 
 ROOT = Path(__file__).resolve().parents[1]
-DATASET = ROOT / "evals" / "starter" / "coding.jsonl"
+DATASET = ROOT / "evals" / "starter" / "cases.jsonl"
 SOLUTIONS = ROOT / "tests" / "starter_solutions"
-IMAGE = "pi-agent-bench-sandbox:0.5.0"
+IMAGE = SANDBOX_IMAGE
 
 
 def run(command: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -60,8 +61,8 @@ def verifier_result(workspace: Path, command: list[str]) -> dict[str, Any]:
     )
 
 
-def prepare(fixture: Path, workspace: Path) -> None:
-    shutil.copytree(fixture, workspace)
+def prepare(starting_repository: Path, workspace: Path) -> None:
+    shutil.copytree(starting_repository, workspace)
     commands = (
         ["git", "init", "-q"],
         ["git", "config", "user.name", "Starter proof"],
@@ -86,16 +87,16 @@ def main() -> int:
         try:
             for case in cases:
                 case_id = case["id"]
-                fixture = ROOT / case["metadata"]["fixture"]
+                starting_repository = ROOT / case["metadata"]["starting_repository"]
                 workspace = root / case_id
-                prepare(fixture, workspace)
+                prepare(starting_repository, workspace)
                 before = verifier_result(
                     workspace, case["expected"]["verifier_command"]
                 )
                 threshold = float(case["expected"]["success_threshold"])
                 if float(before.get("score", 1.0)) >= threshold:
                     raise RuntimeError(
-                        f"{case_id}: untouched fixture unexpectedly passed"
+                        f"{case_id}: untouched starting repository unexpectedly passed"
                     )
 
                 shutil.copytree(SOLUTIONS / case_id, workspace, dirs_exist_ok=True)

@@ -35,8 +35,7 @@ Prepare profiles for:
 
 - a local candidate;
 - a strong hosted control;
-- a cheaper hosted control;
-- an independent planning grader; and
+- a cheaper hosted control; and
 - an optional subscription control.
 
 Model names change over time. Check current provider and model documentation

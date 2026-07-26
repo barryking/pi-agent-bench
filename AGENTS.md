@@ -2,7 +2,7 @@
 
 ## The goal
 
-Build a fair, repeatable way to compare planning and coding agents. The same
+Build a fair, repeatable way to compare coding-agent outcomes. The same
 tests must work with local models and cloud models.
 
 ## Read these pages first
@@ -24,8 +24,8 @@ a choice is wrong, update the page as part of the same change.
 ## Rules
 
 - Only commit examples that are safe to make public.
-- Keep planning tests and coding tests separate.
-- For coding, prefer repeatable tests over asking another model to judge.
+- Score the finished outcome. Treat planning as optional agent-profile evidence.
+- Prefer repeatable tests over asking another model to judge.
 - Run every agent in a new throw-away workspace.
 - Record the model, model version, server, agent profile, harness, Pi, and
   dataset versions.
@@ -40,10 +40,8 @@ python -m pip install -e ".[dev]"
 docker compose -f docker/compose.yaml build
 ruff check .
 pytest
-pi-bench validate evals/planning/sample.jsonl
-pi-bench validate evals/coding/sample.jsonl
-pi-bench validate evals/starter/planning.jsonl
-pi-bench validate evals/starter/coding.jsonl
+pi-bench validate evals/sample/cases.jsonl
+pi-bench validate evals/starter/cases.jsonl
 pi-bench versions
 python scripts/check-starter-verifiers.py
 python scripts/check-agent-profile-examples.py

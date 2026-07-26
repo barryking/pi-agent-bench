@@ -9,11 +9,10 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from .pi_runner import TrustMode
 
-Phase = Literal["planning", "coding"]
 RESOURCE_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 TOOL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 ENVIRONMENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -93,15 +92,11 @@ class AgentResource:
         """Read one UTF-8 context or prompt resource."""
         files = self.files()
         if len(files) != 1:
-            raise ValueError(
-                f"{self.name}: {expected_name} resource must contain one text file"
-            )
+            raise ValueError(f"{self.name}: {expected_name} resource must contain one text file")
         try:
             return files[0][0].read_text(encoding="utf-8")
         except UnicodeDecodeError as exc:
-            raise ValueError(
-                f"{self.name}: prompt and context files must be UTF-8"
-            ) from exc
+            raise ValueError(f"{self.name}: prompt and context files must be UTF-8") from exc
 
 
 @dataclass(frozen=True)
@@ -111,7 +106,7 @@ class AgentProfile:
     name: str
     description: str
     trust_mode: TrustMode
-    tools: dict[str, tuple[str, ...]]
+    tools: tuple[str, ...]
     runtime_env: dict[str, str]
     settings: dict[str, Any]
     context_files: tuple[AgentResource, ...] = ()
@@ -122,13 +117,8 @@ class AgentProfile:
     prompt_templates: tuple[AgentResource, ...] = ()
     mcp_servers: tuple[dict[str, Any], ...] = ()
 
-    def tools_for(self, phase: Phase) -> tuple[str, ...]:
-        return self.tools[phase]
-
     def resolved_runtime_env(self, environ: Mapping[str, str]) -> dict[str, str]:
-        missing = sorted(
-            source for source in self.runtime_env.values() if not environ.get(source)
-        )
+        missing = sorted(source for source in self.runtime_env.values() if not environ.get(source))
         if missing:
             raise ValueError(
                 f"{self.name}: missing required agent environment variable(s): "
@@ -139,21 +129,14 @@ class AgentProfile:
     def public_identity(self) -> dict[str, Any]:
         configuration = {
             "trust_mode": self.trust_mode,
-            "tools": {
-                phase: list(tools) for phase, tools in sorted(self.tools.items())
-            },
+            "tools": list(self.tools),
             "runtime_environment": sorted(self.runtime_env),
             "settings": self.settings,
             "resources": {
-                kind: [
-                    resource.public_identity()
-                    for resource in getattr(self, kind)
-                ]
+                kind: [resource.public_identity() for resource in getattr(self, kind)]
                 for kind in RESOURCE_KINDS
             },
-            "system_prompt": (
-                self.system_prompt.public_identity() if self.system_prompt else None
-            ),
+            "system_prompt": (self.system_prompt.public_identity() if self.system_prompt else None),
             "mcp_servers": list(self.mcp_servers),
         }
         encoded = json.dumps(
@@ -192,7 +175,7 @@ class AgentProfile:
             except ValueError as exc:
                 errors.append(str(exc))
         extension_names = {resource.name for resource in self.extensions}
-        enabled_tools = set(self.tools["planning"]) | set(self.tools["coding"])
+        enabled_tools = set(self.tools)
         for server in self.mcp_servers:
             if server["extension"] not in extension_names:
                 errors.append(
@@ -203,8 +186,7 @@ class AgentProfile:
             if missing_tools:
                 errors.append(
                     f"{self.name}: MCP server {server['name']!r} has tools that "
-                    "are not enabled for planning or coding: "
-                    + ", ".join(missing_tools)
+                    "are not enabled for this outcome: " + ", ".join(missing_tools)
                 )
         return errors
 
@@ -215,10 +197,7 @@ def vanilla_agent_profile() -> AgentProfile:
         name="vanilla",
         description="Clean Pi with no personal or project extras.",
         trust_mode="no-approve",
-        tools={
-            "planning": ("read", "grep", "find", "ls"),
-            "coding": ("read", "bash", "edit", "write", "grep", "find", "ls"),
-        },
+        tools=("read", "bash", "edit", "write", "grep", "find", "ls"),
         runtime_env={},
         settings={},
     )
@@ -232,10 +211,7 @@ def load_agent_profiles(path: str | Path) -> dict[str, AgentProfile]:
     profiles = payload.get("profiles")
     if not isinstance(profiles, dict) or not profiles:
         raise ValueError(f"{source}: profiles must be a non-empty object")
-    return {
-        name: _load_profile(name, value, source.parent)
-        for name, value in profiles.items()
-    }
+    return {name: _load_profile(name, value, source.parent) for name, value in profiles.items()}
 
 
 def _load_profile(name: Any, value: Any, root: Path) -> AgentProfile:
@@ -268,10 +244,7 @@ def _load_profile(name: Any, value: Any, root: Path) -> AgentProfile:
     if not isinstance(settings, dict):
         raise ValueError(f"{name}: settings must be an object")
     _validate_settings(name, settings)
-    resources = {
-        kind: _resources(name, kind, value.get(kind, []), root)
-        for kind in RESOURCE_KINDS
-    }
+    resources = {kind: _resources(name, kind, value.get(kind, []), root) for kind in RESOURCE_KINDS}
     system_prompt_value = value.get("system_prompt")
     system_prompt = (
         _resource(name, "system_prompt", system_prompt_value, root)
@@ -296,23 +269,15 @@ def _load_profile(name: Any, value: Any, root: Path) -> AgentProfile:
     )
 
 
-def _tools(name: str, value: Any) -> dict[str, tuple[str, ...]]:
-    if not isinstance(value, dict) or set(value) != {"planning", "coding"}:
-        raise ValueError(f"{name}: tools must contain planning and coding lists")
-    result: dict[str, tuple[str, ...]] = {}
-    for phase in ("planning", "coding"):
-        tools = value[phase]
-        if (
-            not isinstance(tools, list)
-            or not tools
-            or not all(isinstance(tool, str) and TOOL_NAME.fullmatch(tool) for tool in tools)
-            or len(tools) != len(set(tools))
-        ):
-            raise ValueError(
-                f"{name}: tools.{phase} must contain unique, non-empty tool names"
-            )
-        result[phase] = tuple(tools)
-    return result
+def _tools(name: str, value: Any) -> tuple[str, ...]:
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(tool, str) and TOOL_NAME.fullmatch(tool) for tool in value)
+        or len(value) != len(set(value))
+    ):
+        raise ValueError(f"{name}: tools must contain unique, non-empty tool names")
+    return tuple(value)
 
 
 def _runtime_env(name: str, value: Any) -> dict[str, str]:
@@ -329,8 +294,7 @@ def _runtime_env(name: str, value: Any) -> dict[str, str]:
     protected = sorted(PROTECTED_RUNTIME_ENV.intersection(value))
     if protected:
         raise ValueError(
-            f"{name}: runtime_env cannot replace protected variable(s): "
-            + ", ".join(protected)
+            f"{name}: runtime_env cannot replace protected variable(s): " + ", ".join(protected)
         )
     return dict(value)
 
@@ -397,18 +361,14 @@ def _mcp_servers(profile: str, values: Any) -> tuple[dict[str, Any], ...]:
         if transport not in {"stdio", "http", "sse"}:
             raise ValueError(f"{profile}: MCP transport must be stdio, http, or sse")
         if not isinstance(server, str) or not RESOURCE_NAME.fullmatch(server):
-            raise ValueError(
-                f"{profile}: MCP server identity must be a public-safe name"
-            )
+            raise ValueError(f"{profile}: MCP server identity must be a public-safe name")
         if (
             not isinstance(tools, list)
             or not tools
             or not all(isinstance(tool, str) and TOOL_NAME.fullmatch(tool) for tool in tools)
             or len(tools) != len(set(tools))
         ):
-            raise ValueError(
-                f"{profile}: MCP tools must be a unique, non-empty tool-name list"
-            )
+            raise ValueError(f"{profile}: MCP tools must be a unique, non-empty tool-name list")
         names.add(name)
         servers.append(dict(value))
     return tuple(servers)
@@ -418,13 +378,9 @@ def _validate_settings(profile: str, settings: dict[str, Any]) -> None:
     for key, item in _walk_items(settings):
         folded = key.casefold()
         if folded in FORBIDDEN_SETTING_KEYS:
-            raise ValueError(
-                f"{profile}: settings.{key} belongs in the model or resource profile"
-            )
+            raise ValueError(f"{profile}: settings.{key} belongs in the model or resource profile")
         if _looks_like_secret_key(key):
-            raise ValueError(
-                f"{profile}: settings cannot contain secrets; use runtime_env"
-            )
+            raise ValueError(f"{profile}: settings cannot contain secrets; use runtime_env")
         if not isinstance(item, (dict, list, str, int, float, bool)) and item is not None:
             raise ValueError(f"{profile}: settings.{key} is not JSON-compatible")
 
@@ -443,6 +399,4 @@ def _walk_items(value: Any) -> Iterable[tuple[str, Any]]:
 
 def _looks_like_secret_key(key: str) -> bool:
     folded = re.sub(r"[^a-z0-9]", "", key.casefold())
-    return any(marker in folded for marker in SECRET_MARKERS) or folded.endswith(
-        "token"
-    )
+    return any(marker in folded for marker in SECRET_MARKERS) or folded.endswith("token")

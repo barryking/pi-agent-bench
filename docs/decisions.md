@@ -1,207 +1,72 @@
-# Decisions we have made
+# Important design choices
 
-This page records important choices. Change it when the evidence changes.
+## Use Inspect
 
-## Test the whole agent
+Inspect owns runs, limits, logs, scores, and detailed evidence.
 
-We test Pi doing a full task. We do not test only one model answer.
+Pi Agent Bench adds the Pi connection, clean Docker sandbox, ready-to-run
+cases, protected verifiers, model and agent profiles, and comparison dashboard.
 
-Why: tools, files, retries, and the agent loop can change the outcome.
+## Measure one finished outcome
 
-## Use Inspect AI as the controller
+A case asks for one finished repository result. Planning and coding are not
+separate benchmark phases.
 
-Inspect loads cases, starts Docker, applies limits, stores logs, and runs
-scorers.
+Why: users care whether the job was completed well and quickly. Planning is
+one possible agent behaviour, not a second product.
 
-Why: using one controller is simpler and makes runs easier to compare.
+## Keep agent profiles general
 
-## Keep Pi as the agent
+Agent profiles are not limited to `direct` or `plan-first`. They can change
+instructions, tools, skills, extensions, prompts, settings, MCP, and other Pi
+behaviour.
 
-We run the real Pi tool loop.
+Why: many agent changes can affect time and quality. The profile name and
+content fingerprint record the whole setup without inventing special switches.
 
-Why: replacing Pi with our own small loop would test a different product.
+## Prefer executable evidence
 
-## Use a clean container for every trial
+Protected verifiers and required behaviour decide final quality and success.
 
-Every trial gets new files, a new Pi home, and a new session.
+Why: there may be many correct patches. A hidden test contract is fairer than
+comparing against one reference patch.
 
-Why: one trial must not change another trial.
+## Keep planning evidence optional
 
-## Make agent setup an explicit profile
+If an agent writes a plan, Inspect keeps it in the trajectory. People or an
+independent grader may inspect it later. It does not replace outcome quality.
 
-Skills, extensions, prompt templates, themes, context files, and old sessions
-from a person's normal Pi setup are disabled.
+If a plan is itself the requested deliverable, it should be its own outcome
+case with a suitable executable verifier.
 
-Why: a personal extra would make the comparison unfair.
+## Keep the model and agent separate
 
-The `vanilla` agent profile adds nothing. Other named profiles may add exact
-tools, context, prompts, skills, extensions, settings, or MCP details. Selected
-files are hashed and recorded.
+A model profile says which inference model and settings to use.
 
-Why: agent setup can change speed and quality. We need to test it on purpose,
-not let it leak into a run by accident.
+An agent profile says how Pi is configured.
 
-## Keep model and agent profiles separate
+This lets us compare:
 
-A model profile chooses the provider, model, reasoning setting, and inference
-facts. An agent profile chooses Pi's behaviour and resources.
+- several models with vanilla Pi;
+- several agent setups on one model; or
+- every selected model-and-agent combination.
 
-Why: one model can then be compared with vanilla Pi, a skill, or a tool without
-pretending these are different models.
+## Use clean containers
 
-## Use an extension for MCP
+Every trial gets a new Docker workspace and a private temporary Pi home.
+Personal Pi resources are not loaded by accident.
 
-Pi has no built-in general MCP client. An agent profile can include a chosen Pi
-extension and safe MCP server details.
+## Put scores in Inspect first
 
-Why: this follows Pi's extension design and avoids adding a second tool system
-to Pi Agent Bench.
+Inspect logs are the source evidence. Dashboard files are disposable exports.
 
-## Let Inspect control normal model settings
+## Compare only matching cohorts
 
-For bridge runs, Inspect controls the chosen model and generation settings.
+Rankings require the same case version, verifier fingerprint, limits, Pi
+version, container, and case coverage. Use at least three trials per setup and
+case before trusting small differences.
 
-Why: Pi is pointed at a bridge model name, not the real provider model.
+## Main comparison
 
-## Support subscription models as a separate route
-
-Pi may call a subscription model directly using one selected login.
-
-Why: some useful models are available through subscriptions instead of normal
-API billing.
-
-This route has less Inspect model detail, so we record Pi events too.
-
-## Treat cloud models as controls
-
-Use one strong cloud model and one cheaper cloud model.
-
-Why: cloud models show the quality ceiling and price trade-off. A local model
-does not need to win every measure to be useful.
-
-## Keep the framework hardware-neutral
-
-The project is called Pi Agent Bench. DGX is one local server choice.
-
-Why: Inspect, Pi, Docker, cases, and reports can work with many model servers.
-
-## Use the name Pi Agent Bench
-
-The final project name is **Pi Agent Bench**.
-
-Use:
-
-- GitHub repository: `pi-agent-bench`;
-- Python package: `pi_agent_bench`;
-- command: `pi-bench`; and
-- Docker image: `pi-agent-bench-sandbox`.
-
-Why: it says which agent we test and that this is a benchmark. It does not tie
-the project to DGX or pretend to replace Inspect.
-
-## Keep planning and coding separate
-
-Planning and coding use different sessions and different scores.
-
-Why: a long planning conversation should not fill the coding context.
-
-## Prefer real checks for coding
-
-Hidden tests and required behaviour are the main coding score.
-
-Why: one reference patch is not the only correct solution.
-
-## Use an independent planning grader
-
-The tested model cannot grade itself.
-
-Why: self-grading is not trustworthy.
-
-People must check a hidden sample of the grader's scores.
-
-## Store scores in Inspect first
-
-Inspect stores quality, success, and score parts. The dashboard reads smaller
-copies of those results.
-
-Why: the full Inspect log is the best evidence and can be checked later.
-
-## Keep broken attempts out of rankings
-
-Interrupted runs, run errors, and invalid scores go under `results/_invalid/`.
-
-Why: a system problem is not the same thing as a bad model answer.
-
-## Make new cases safe drafts
-
-Generated cases cannot run. Generated coding verifiers fail.
-
-Why: unfinished work, including AI-written work, must not become ranking
-evidence by mistake.
-
-## Require balanced evidence before ranking
-
-Ranking needs:
-
-- the same shared cases;
-- at least five shared cases;
-- at least three trials per profile and case;
-- matching versions; and
-- matching benchmark files.
-
-Why: a model should not rank higher just because it skipped hard cases.
-
-## Use the same harness for every model
-
-Compared models use the same Pi, agent profile, cases, limits, and Docker image.
-
-Why: otherwise we cannot tell whether the model caused the difference.
-
-When the agent profile is the thing being tested, keep the model profile and
-all other facts the same.
-
-## Start with a 128K model profile
-
-The first broad model profile uses a 128K context where supported.
-
-Why: this leaves room for realistic tasks and agent work without always using
-the largest and slowest setting.
-
-Each case may use a smaller limit.
-
-## Keep public and private cases apart
-
-This repository stays public-safe. Protected cases live elsewhere.
-
-Why: the framework can be shared without sharing private company data.
-
-## Own the starter fixtures
-
-The five starter cases use small Python and Node projects owned by Pi Agent
-Bench.
-
-Why: a clean clone can run them without copying an unlicensed or changing
-third-party repository. External and company repositories remain optional.
-
-## Choices still being tested
-
-These are ideas, not final answers:
-
-- which local planning model is best;
-- which local coding model is best;
-- which compression keeps enough quality;
-- whether vLLM is the best server;
-- whether prefix caching should be on;
-- how many trials are enough for close results.
-
-## Open questions
-
-- Which local model gives the best useful result?
-- Is one model enough for both planning and coding?
-- Which context size gives the best speed and quality?
-- How closely does the planning grader match people?
-- How many real cases are needed?
-- Which failure groups should the dashboard show?
-- What quality gap is acceptable for private local inference?
-- How should hardware, power, and maintenance cost be counted?
-- Should the final advice choose one model or route different jobs differently?
+The default view is quality against total outcome time. Upper-left is better:
+more quality in less time.

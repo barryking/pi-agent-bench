@@ -13,8 +13,12 @@ pi-bench agent-profiles \
   --agent-profiles-file examples/agent-profiles/agent-profiles.example.json
 ```
 
-The file contains one focused profile for each feature and one
+The file contains focused profiles, including `example-plan-first`, and one
 `example-everything` profile used by the integration check.
+
+`example-plan-first` shows that planning is ordinary profile guidance. It does
+not change the case, create another benchmark phase, or replace the final
+outcome verifier.
 
 ## The common loading path
 
@@ -99,23 +103,20 @@ extensions/repository-info.ts
 The profile must do two things:
 
 1. name the extension file; and
-2. add its registered tool name to the phase tool list.
+2. add its registered tool name to the profile tool list.
 
 ```json
 {
-  "tools": {
-    "planning": ["read", "grep", "find", "ls", "repository_info"],
-    "coding": [
-      "read",
-      "bash",
-      "edit",
-      "write",
-      "grep",
-      "find",
-      "ls",
-      "repository_info"
-    ]
-  },
+  "tools": [
+    "read",
+    "bash",
+    "edit",
+    "write",
+    "grep",
+    "find",
+    "ls",
+    "repository_info"
+  ],
   "extensions": [
     {
       "name": "repository-info",
@@ -179,7 +180,7 @@ Pi has no built-in general MCP client. An MCP profile therefore needs:
 1. an extension that acts as the MCP client;
 2. the server program or endpoint;
 3. an `mcp_servers` entry; and
-4. every exposed MCP tool in the phase tool list.
+4. every exposed MCP tool in the profile tool list.
 
 The owned example contains:
 
@@ -192,19 +193,16 @@ The important profile parts are:
 
 ```json
 {
-  "tools": {
-    "planning": ["read", "grep", "find", "ls", "example_catalog_lookup"],
-    "coding": [
-      "read",
-      "bash",
-      "edit",
-      "write",
-      "grep",
-      "find",
-      "ls",
-      "example_catalog_lookup"
-    ]
-  },
+  "tools": [
+    "read",
+    "bash",
+    "edit",
+    "write",
+    "grep",
+    "find",
+    "ls",
+    "example_catalog_lookup"
+  ],
   "extensions": [
     {
       "name": "mcp-client",
@@ -256,13 +254,13 @@ In Inspect, a successful call to `example_catalog_lookup` contains
 Use any configured model:
 
 ```bash
-pi-bench run coding \
+pi-bench run \
   --model-profile hosted-quality \
   --model-profiles-file configs/model-baselines.local.json \
   --agent-profile example-extension \
   --agent-profiles-file examples/agent-profiles/agent-profiles.example.json \
   --env-file .env.local \
-  --dataset evals/starter/coding.jsonl \
+  --dataset evals/starter/cases.jsonl \
   --campaign agent-extension-example
 ```
 

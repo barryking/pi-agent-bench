@@ -20,7 +20,7 @@ Pi Agent Bench records:
 
 - quality from `0` to `1`;
 - success as yes or no;
-- each verifier or rubric part;
+- each verifier part;
 - success across repeated trials; and
 - how steady the result is.
 
@@ -185,7 +185,8 @@ The dashboard shows:
 - rank changes across trials; and
 - history for one case.
 
-Planning and coding are never mixed in one score.
+Each score measures one finished outcome. Planning is agent-profile evidence,
+not a separate score that is mixed with the final result.
 
 Different dataset versions are never mixed.
 

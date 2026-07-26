@@ -74,10 +74,7 @@ Add this profile to `configs/agent-profiles.local.json`:
   "team-agent": {
     "description": "Vanilla Pi plus our test-first guidance.",
     "trust_mode": "no-approve",
-    "tools": {
-      "planning": ["read", "grep", "find", "ls"],
-      "coding": ["read", "bash", "edit", "write", "grep", "find", "ls"]
-    },
+    "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
     "runtime_env": {},
     "settings": {},
     "context_files": [
@@ -105,21 +102,25 @@ Paths are read from the folder containing the profile JSON file.
 
 ## What each part means
 
+### Behaviour
+
+There is no special workflow switch. The profile's instructions and resources
+may ask Pi to plan first, write tests first, review its work, use extra tools,
+or follow any other repeatable process. The profile name and content hashes
+record the whole setup.
+
 ### Tools
 
-`tools.planning` and `tools.coding` are the tools Pi may use.
+`tools` lists everything Pi may use while completing the outcome.
 
-Planning normally needs only tools that read files. Coding also needs tools
-that can run commands and change files.
-
-If an extension adds a tool, put its tool name in the right list too.
+If an extension adds a tool, put its tool name in this list too.
 
 ### Context files
 
 `context_files` holds standing instructions such as `AGENTS.md`.
 
 Pi Agent Bench joins the selected files into one temporary `AGENTS.md`. It does
-not load the `AGENTS.md` from your Mac or from the case fixture by accident.
+not load the `AGENTS.md` from your Mac or from the case starting repository by accident.
 
 ### System prompt
 
@@ -224,14 +225,14 @@ server. Put private URLs and tokens in `runtime_env`, not in the profile.
 Use one model and repeat `--agent-profile`:
 
 ```bash
-pi-bench campaign coding \
+pi-bench campaign \
   --model-profile hosted-quality \
   --agent-profile vanilla \
   --agent-profile team-agent \
   --model-profiles-file configs/model-baselines.local.json \
   --agent-profiles-file configs/agent-profiles.local.json \
   --env-file .env.local \
-  --dataset evals/starter/coding.jsonl \
+  --dataset evals/starter/cases.jsonl \
   --campaign agent-profile-check-v1 \
   --epochs 3 \
   --resume

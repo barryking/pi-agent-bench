@@ -81,24 +81,14 @@ DEMO_PROFILES = {
     },
 }
 
-DEMO_CASES = {
-    "planning": [
-        "plan-auth-migration",
-        "plan-rate-limiter",
-        "plan-event-recovery",
-        "plan-tenant-isolation",
-        "plan-observability",
-        "plan-zero-downtime",
-    ],
-    "coding": [
-        "code-health-endpoint",
-        "code-pagination-fix",
-        "code-cache-invalidation",
-        "code-webhook-retry",
-        "code-schema-migration",
-        "code-permission-boundary",
-    ],
-}
+DEMO_CASES = [
+    "outcome-health-endpoint",
+    "outcome-pagination-fix",
+    "outcome-cache-invalidation",
+    "outcome-webhook-retry",
+    "outcome-schema-migration",
+    "outcome-permission-boundary",
+]
 
 
 def generate_demo_results(
@@ -111,73 +101,53 @@ def generate_demo_results(
     destination.mkdir(parents=True, exist_ok=True)
     existing = list(destination.glob("*.json"))
     if existing:
-        raise ValueError(
-            f"{destination}: contains JSON results; choose an empty demo directory"
-        )
+        raise ValueError(f"{destination}: contains JSON results; choose an empty demo directory")
 
     randomizer = random.Random(20260725)
     started = datetime(2026, 5, 30, 9, 0, tzinfo=UTC)
     written: list[Path] = []
-    for phase, cases in DEMO_CASES.items():
-        phase_adjustment = -0.03 if phase == "coding" else 0.0
-        for profile_index, (profile, spec) in enumerate(DEMO_PROFILES.items()):
-            for case_index, case_id in enumerate(cases):
-                difficulty = (case_index - 2.5) * 0.025
-                for trial in range(1, trials + 1):
-                    quality = _clamp(
-                        spec["quality"]
-                        + phase_adjustment
-                        - difficulty
-                        + randomizer.uniform(-0.07, 0.07)
-                    )
-                    success = quality >= 0.78
-                    wall_seconds = max(
-                        8.0,
-                        spec["seconds"]
-                        * (1 + difficulty)
-                        * randomizer.uniform(0.84, 1.18),
-                    )
-                    total_tokens = int(
-                        spec["tokens"]
-                        * (1 + difficulty)
-                        * randomizer.uniform(0.88, 1.14)
-                    )
-                    input_tokens = int(total_tokens * randomizer.uniform(0.68, 0.78))
-                    output_tokens = total_tokens - input_tokens
-                    run_id = (
-                        f"demo-{phase}-{profile_index + 1}-{case_index + 1}-{trial}"
-                    )
-                    timestamp = started + timedelta(
-                        days=(trial - 1) * 21 + case_index,
-                        minutes=profile_index * 11,
-                    )
-                    cost = spec["cost"]
-                    record = _record(
-                        run_id=run_id,
-                        case_id=case_id,
-                        phase=phase,
-                        trial=trial,
-                        timestamp=timestamp,
-                        profile=profile,
-                        spec=spec,
-                        quality=quality,
-                        success=success,
-                        wall_seconds=wall_seconds,
-                        input_tokens=input_tokens,
-                        output_tokens=output_tokens,
-                        total_cost=(
-                            cost * total_tokens / spec["tokens"]
-                            if cost is not None
-                            else None
-                        ),
-                        randomizer=randomizer,
-                    )
-                    path = destination / f"{run_id}.json"
-                    path.write_text(
-                        json.dumps(record, indent=2, sort_keys=True) + "\n",
-                        encoding="utf-8",
-                    )
-                    written.append(path)
+    for profile_index, (profile, spec) in enumerate(DEMO_PROFILES.items()):
+        for case_index, case_id in enumerate(DEMO_CASES):
+            difficulty = (case_index - 2.5) * 0.025
+            for trial in range(1, trials + 1):
+                quality = _clamp(spec["quality"] - difficulty + randomizer.uniform(-0.07, 0.07))
+                success = quality >= 0.78
+                wall_seconds = max(
+                    8.0,
+                    spec["seconds"] * (1 + difficulty) * randomizer.uniform(0.84, 1.18),
+                )
+                total_tokens = int(
+                    spec["tokens"] * (1 + difficulty) * randomizer.uniform(0.88, 1.14)
+                )
+                input_tokens = int(total_tokens * randomizer.uniform(0.68, 0.78))
+                output_tokens = total_tokens - input_tokens
+                run_id = f"demo-outcome-{profile_index + 1}-{case_index + 1}-{trial}"
+                timestamp = started + timedelta(
+                    days=(trial - 1) * 21 + case_index,
+                    minutes=profile_index * 11,
+                )
+                cost = spec["cost"]
+                record = _record(
+                    run_id=run_id,
+                    case_id=case_id,
+                    trial=trial,
+                    timestamp=timestamp,
+                    profile=profile,
+                    spec=spec,
+                    quality=quality,
+                    success=success,
+                    wall_seconds=wall_seconds,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_cost=(cost * total_tokens / spec["tokens"] if cost is not None else None),
+                    randomizer=randomizer,
+                )
+                path = destination / f"{run_id}.json"
+                path.write_text(
+                    json.dumps(record, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                written.append(path)
     return written
 
 
@@ -185,7 +155,6 @@ def _record(
     *,
     run_id: str,
     case_id: str,
-    phase: str,
     trial: int,
     timestamp: datetime,
     profile: str,
@@ -198,7 +167,7 @@ def _record(
     total_cost: float | None,
     randomizer: random.Random,
 ) -> dict[str, Any]:
-    tool_calls = randomizer.randint(4, 13) if phase == "coding" else randomizer.randint(1, 5)
+    tool_calls = randomizer.randint(4, 13)
     failed_tools = 0 if randomizer.random() > 0.16 else 1
     components = {
         "correctness": quality >= 0.72,
@@ -225,7 +194,6 @@ def _record(
         "started_at": timestamp.isoformat().replace("+00:00", "Z"),
         "campaign": "synthetic-preview",
         "cache_state": "warm",
-        "phase": phase,
         "trial_number": trial,
         "model_configuration": {
             "profile": profile,
@@ -233,12 +201,20 @@ def _record(
             "configuration_fingerprint": f"demo-config-{profile}",
             "configuration": spec["configuration"],
         },
+        "agent_configuration": {
+            "profile": "vanilla",
+            "description": "Clean Pi synthetic preview.",
+            "configuration_fingerprint": "demo-agent-vanilla",
+            "configuration": {
+                "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
+            },
+        },
         "inspect_model": spec["model"],
         "harness": {
-            "framework_version": "0.5.0-demo",
+            "framework_version": "0.6.0-demo",
             "inspect_version": "0.3.249",
             "pi_version_actual": "0.82.1",
-            "sandbox_image": "pi-agent-bench-sandbox:0.5.0",
+            "sandbox_image": "pi-agent-bench-sandbox:0.6.0",
             "repository_commit": "demo000000000000000000000000000000000000",
             "repository_branch": "synthetic-preview",
             "repository_dirty": False,
@@ -252,7 +228,6 @@ def _record(
             "components": components,
             "method": "synthetic-demo",
             "success_threshold": 0.78,
-            "grader_model": None,
         },
         "wall_seconds": round(wall_seconds, 3),
         "usage": usage,

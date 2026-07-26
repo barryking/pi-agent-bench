@@ -8,7 +8,7 @@ Checked boxes are done. Empty boxes are still needed.
 - [x] Put pilot files under one clear `evals/pilots/<case>/` layout
 - [x] Remove old duplicate pilot case versions
 - [x] Case file format and checks
-- [x] Fake planning and coding examples
+- [x] Fake complete-outcome examples
 - [x] Clean Docker workspace
 - [x] Real Pi agent inside Docker
 - [x] Choose the MIT open-source licence
@@ -21,22 +21,19 @@ Checked boxes are done. Empty boxes are still needed.
 - [x] Keep each case's exact limits
 - [x] Add quality, success, and score parts
 - [x] Add repeated-trial statistics
-- [x] Add an independent planning grader
-- [x] Re-grade saved planning logs
-- [x] Replay coding verification from saved diffs
-- [x] Prove a coding case fails before and passes after a known-good patch
-- [ ] Check the planning grader against people
+- [x] Keep plan evidence in Inspect without giving it a second ranking
+- [x] Replay outcome verification from saved diffs
+- [x] Prove an outcome case fails before and passes after a known-good patch
 
 ## Models
 
 - [x] Add local, strong cloud, and cheaper cloud profile slots
-- [x] Add an independent grader slot
 - [x] Add subscription login support
 - [ ] Run a complete strong cloud baseline
 - [ ] Run a complete local baseline
 - [ ] Test 32K, 64K, and 128K context sizes
 - [ ] Record cold and warm local runs
-- [ ] Fully check direct subscription limits on a real coding run
+- [ ] Fully check direct subscription limits on a real outcome run
 
 ## Agent profiles
 
@@ -55,17 +52,16 @@ Checked boxes are done. Empty boxes are still needed.
 
 - [x] Add safe case scaffolding
 - [x] Refuse unfinished draft cases
-- [x] Add two real public planning/coding pilot pairs
-- [x] Prove all five owned starter coding cases
+- [x] Add two real public outcome pilots
+- [x] Prove all five owned starter outcome cases
 - [ ] Re-prove the external user-filter pilot with the current image
 - [x] Build five owned shared starter cases
 - [ ] Build a larger private case set
-- [ ] Add a plan-then-code case type
 
 ## Reports
 
 - [x] Save one small record per trial
-- [x] Save coding diffs
+- [x] Save outcome diffs
 - [x] Export CSV and JSONL
 - [x] Rebuild dashboard records from Inspect logs
 - [x] Add a local comparison dashboard

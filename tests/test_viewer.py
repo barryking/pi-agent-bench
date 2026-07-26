@@ -14,7 +14,6 @@ def test_serves_local_dashboard_and_generated_metrics(tmp_path):
                 "case_id": "case-1",
                 "dataset_version": "1",
                 "started_at": "2026-07-25T12:00:00Z",
-                "phase": "coding",
                 "trial_number": 1,
                 "model_configuration": {
                     "profile": "dgx",

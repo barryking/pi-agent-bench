@@ -56,9 +56,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     new_case = subparsers.add_parser(
         "new-case",
-        help="scaffold a planning or coding benchmark case",
+        help="scaffold one complete repository-outcome benchmark case",
     )
-    new_case.add_argument("phase", choices=["planning", "coding"])
     new_case.add_argument("--id", required=True)
     new_case.add_argument("--dataset", type=Path, required=True)
     new_case.add_argument("--dataset-version", default="draft-1")
@@ -96,27 +95,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_model_and_agent_profile_arguments(doctor)
 
-    run = subparsers.add_parser("run", help="run Inspect planning or coding suites")
-    run.add_argument("phase", choices=["planning", "coding", "all"])
+    run = subparsers.add_parser("run", help="run an Inspect outcome suite")
     _add_model_and_agent_profile_arguments(run)
     run.add_argument("--logs-dir", type=Path, default=Path("logs"))
     run.add_argument("--results-dir", type=Path, default=Path("results"))
     run.add_argument(
         "--dataset",
         type=Path,
-        help="dataset for a planning or coding run; cannot be used with phase=all",
-    )
-    run.add_argument(
-        "--planning-dataset",
-        type=Path,
-        default=Path("evals/planning/sample.jsonl"),
-        help="planning dataset used when phase=all",
-    )
-    run.add_argument(
-        "--coding-dataset",
-        type=Path,
-        default=Path("evals/coding/sample.jsonl"),
-        help="coding dataset used when phase=all",
+        default=Path("evals/sample/cases.jsonl"),
+        help="outcome dataset to run",
     )
     run.add_argument("--epochs", type=int, default=1)
     run.add_argument(
@@ -134,20 +121,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--build",
         action="store_true",
         help="build the pinned sandbox image before evaluating",
-    )
-    run.add_argument(
-        "--grader-model",
-        help=(
-            "independent model used for weighted planning-rubric scoring; "
-            "omit to use deterministic concept smoke scoring"
-        ),
-    )
-    run.add_argument(
-        "--grader-model-profile",
-        help=(
-            "profile used as the independent planning grader; recommended when "
-            "the evaluated model and grader need different endpoints or credentials"
-        ),
     )
     run.add_argument(
         "--cost-limit",
@@ -170,7 +143,6 @@ def build_parser() -> argparse.ArgumentParser:
         "campaign",
         help="run the same suite across several model-and-agent setups",
     )
-    campaign.add_argument("phase", choices=["planning", "coding", "all"])
     campaign.add_argument(
         "--model-profile",
         action="append",
@@ -186,10 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
     campaign.add_argument(
         "--agent-profile",
         action="append",
-        help=(
-            "agent profile to run; repeat to compare several Pi setups "
-            "(default: vanilla)"
-        ),
+        help=("agent profile to run; repeat to compare several Pi setups (default: vanilla)"),
     )
     campaign.add_argument(
         "--agent-profiles-file",
@@ -200,16 +169,10 @@ def build_parser() -> argparse.ArgumentParser:
     campaign.add_argument("--env-file", type=Path, default=Path(".env.local"))
     campaign.add_argument("--logs-dir", type=Path, default=Path("logs"))
     campaign.add_argument("--results-dir", type=Path, default=Path("results"))
-    campaign.add_argument("--dataset", type=Path)
     campaign.add_argument(
-        "--planning-dataset",
+        "--dataset",
         type=Path,
-        default=Path("evals/planning/sample.jsonl"),
-    )
-    campaign.add_argument(
-        "--coding-dataset",
-        type=Path,
-        default=Path("evals/coding/sample.jsonl"),
+        default=Path("evals/starter/cases.jsonl"),
     )
     campaign.add_argument("--epochs", type=int, default=3)
     campaign.add_argument("--campaign", required=True)
@@ -218,44 +181,14 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["unspecified", "cold", "warm"],
         default="unspecified",
     )
-    campaign.add_argument(
-        "--grader-model-profile",
-        help="name of the independent grader in the model profiles file",
-    )
-    campaign.add_argument("--grader-model")
     campaign.add_argument("--cost-limit", type=float)
     campaign.add_argument("--build", action="store_true")
     campaign.add_argument("--resume", action="store_true")
     campaign.add_argument("--retry-attempts", type=int, default=1)
 
-    rescore = subparsers.add_parser(
-        "rescore-planning",
-        help="apply a new independent rubric grader to a completed Inspect log",
-    )
-    rescore.add_argument("log_file", type=Path)
-    grader = rescore.add_mutually_exclusive_group(required=True)
-    grader.add_argument("--grader-model")
-    grader.add_argument(
-        "--grader-model-profile",
-        help="name of the independent grader in the model profiles file",
-    )
-    rescore.add_argument(
-        "--model-profiles-file",
-        type=Path,
-        default=Path("configs/model-baselines.example.json"),
-        help="JSON file containing model profiles",
-    )
-    rescore.add_argument("--env-file", type=Path)
-    rescore.add_argument("--output-log", type=Path)
-    rescore.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="replace the source Inspect log instead of writing *.rescored.eval",
-    )
-
     replay = subparsers.add_parser(
-        "replay-coding",
-        help="reapply saved coding diffs and rerun protected verifiers",
+        "replay-outcome",
+        help="reapply a saved repository diff and rerun its protected verifier",
     )
     replay.add_argument("log_file", type=Path)
     replay.add_argument(
@@ -266,7 +199,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     prove = subparsers.add_parser(
         "prove-case",
-        help="prove that one coding case fails before and passes after a known-good patch",
+        help="prove that one outcome case fails before and passes after a known-good patch",
     )
     prove.add_argument("dataset", type=Path)
     prove.add_argument("--known-good-diff", type=Path, required=True)

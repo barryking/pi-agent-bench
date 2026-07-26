@@ -6,9 +6,7 @@ from pi_agent_bench.cli_parser import build_parser
 
 
 def test_report_defaults_to_the_selected_results_directory():
-    args = build_parser().parse_args(
-        ["report", "--results-dir", "results/example-campaign"]
-    )
+    args = build_parser().parse_args(["report", "--results-dir", "results/example-campaign"])
 
     assert args.results_dir == Path("results/example-campaign")
     assert args.output is None
@@ -22,7 +20,6 @@ def test_campaign_can_compare_agent_profiles_with_the_same_model():
     args = build_parser().parse_args(
         [
             "campaign",
-            "coding",
             "--model-profile",
             "local-model",
             "--agent-profile",
@@ -68,7 +65,6 @@ def test_old_ambiguous_profile_flags_are_not_supported(old_flag):
         build_parser().parse_args(
             [
                 "campaign",
-                "coding",
                 old_flag,
                 "old-value",
                 "--model-profile",

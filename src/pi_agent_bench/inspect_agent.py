@@ -6,7 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from inspect_ai.agent import Agent, AgentState, agent, sandbox_agent_bridge
 from inspect_ai.model import ChatMessageAssistant, user_prompt
@@ -23,8 +23,6 @@ from .pi_runner import (
     summarise_events,
 )
 from .versions import PI_VERSION
-
-Phase = Literal["planning", "coding"]
 
 
 class PiTelemetry(StoreModel):
@@ -58,12 +56,8 @@ def configure_pi_case() -> Solver:
         case_limits = store_as(PiCaseLimits)
         case_limits.seconds = int(limits.get("seconds", case_limits.seconds))
         case_limits.turns = int(limits.get("turns", case_limits.turns))
-        case_limits.context_tokens = int(
-            limits.get("context_tokens", case_limits.context_tokens)
-        )
-        case_limits.total_tokens = int(
-            limits.get("total_tokens", case_limits.context_tokens)
-        )
+        case_limits.context_tokens = int(limits.get("context_tokens", case_limits.context_tokens))
+        case_limits.total_tokens = int(limits.get("total_tokens", case_limits.context_tokens))
         return state
 
     return solve
@@ -71,7 +65,6 @@ def configure_pi_case() -> Solver:
 
 @agent
 def pi_agent(
-    phase: Phase,
     timeout_seconds: int | None = None,
     context_tokens: int | None = None,
     direct_provider: str | None = None,
@@ -83,7 +76,7 @@ def pi_agent(
 ) -> Agent:
     """Run Pi through Inspect's bridge or an isolated Pi subscription login."""
     selected_agent = agent_profile or vanilla_agent_profile()
-    tools = selected_agent.tools_for(phase)
+    tools = selected_agent.tools
     configured_runtime_env = dict(agent_runtime_env or {})
 
     async def execute(state: AgentState) -> AgentState:
@@ -92,6 +85,7 @@ def pi_agent(
         sample_timeout = timeout_seconds or limits.seconds
         sample_context = context_tokens or limits.context_tokens
         telemetry = store_as(PiTelemetry)
+        prompt = user_prompt(state.messages).text
         version_result = await sandbox().exec(["pi", "--version"], timeout=30)
         if not version_result.success:
             raise RuntimeError(f"could not read Pi version: {version_result.stderr}")
@@ -119,8 +113,7 @@ def pi_agent(
                 provider_auth = auth[direct_provider]
             except (OSError, json.JSONDecodeError, KeyError) as exc:
                 raise RuntimeError(
-                    f"could not load {direct_provider} credentials from the configured "
-                    "Pi auth file"
+                    f"could not load {direct_provider} credentials from the configured Pi auth file"
                 ) from exc
             await sandbox().write_file(
                 f"{config_dir}/auth.json",
@@ -144,7 +137,7 @@ def pi_agent(
                 prompt_templates_enabled=bool(selected_agent.prompt_templates),
                 thinking_level=thinking_level,
             )
-            command = build_command(config, user_prompt(state.messages).text)
+            command = build_command(config, prompt)
             guarded_command = [
                 "python3",
                 "/tmp/pi-bench-pi-guard.py",
@@ -174,9 +167,7 @@ def pi_agent(
             )
             if not result.success and result.returncode != 75:
                 detail = result.stderr.strip() or "no stderr was produced"
-                raise RuntimeError(
-                    f"Pi exited with code {result.returncode}: {detail}"
-                )
+                raise RuntimeError(f"Pi exited with code {result.returncode}: {detail}")
             return state
 
         async with sandbox_agent_bridge(
@@ -204,7 +195,7 @@ def pi_agent(
                 extensions_enabled=bool(selected_agent.extensions),
                 prompt_templates_enabled=bool(selected_agent.prompt_templates),
             )
-            command = build_command(config, user_prompt(state.messages).text)
+            command = build_command(config, prompt)
             telemetry.command = list(command)
             result = await _execute_pi(
                 list(command),
@@ -265,11 +256,14 @@ def _joined_text_resources(
     resources: tuple[AgentResource, ...],
     expected_name: str,
 ) -> str:
-    return "\n\n".join(
-        f"<!-- agent profile resource: {resource.name} -->\n"
-        f"{_single_text_resource(resource, expected_name).rstrip()}"
-        for resource in resources
-    ) + "\n"
+    return (
+        "\n\n".join(
+            f"<!-- agent profile resource: {resource.name} -->\n"
+            f"{_single_text_resource(resource, expected_name).rstrip()}"
+            for resource in resources
+        )
+        + "\n"
+    )
 
 
 async def _stage_resource_group(
@@ -284,9 +278,7 @@ async def _stage_resource_group(
             if is_single_file and single_name:
                 suffix = single_name if single_name.startswith(".") else ""
                 filename = (
-                    f"{resource.name}{suffix}"
-                    if suffix
-                    else f"{resource.name}/{single_name}"
+                    f"{resource.name}{suffix}" if suffix else f"{resource.name}/{single_name}"
                 )
                 destination = f"{destination_root}/{filename}"
             elif is_single_file:
@@ -297,9 +289,7 @@ async def _stage_resource_group(
             if os.access(source, os.X_OK):
                 changed = await sandbox().exec(["chmod", "+x", destination])
                 if not changed.success:
-                    raise RuntimeError(
-                        f"could not make agent resource executable: {destination}"
-                    )
+                    raise RuntimeError(f"could not make agent resource executable: {destination}")
 
 
 async def _execute_pi(

@@ -3,7 +3,7 @@ FROM node:22.22.0-bookworm-slim
 ARG PI_VERSION=0.82.1
 
 LABEL org.opencontainers.image.title="Pi Agent Bench sandbox" \
-      org.opencontainers.image.version="0.5.0" \
+      org.opencontainers.image.version="0.6.0" \
       dev.pi.version="0.82.1"
 
 RUN apt-get update \

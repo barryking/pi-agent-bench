@@ -9,7 +9,7 @@ from pi_agent_bench.reporting import build_report, write_visualizer_exports
 def test_demo_data_is_balanced_and_clearly_marked(tmp_path):
     paths = generate_demo_results(tmp_path, trials=3)
 
-    assert len(paths) == len(DEMO_PROFILES) * sum(map(len, DEMO_CASES.values())) * 3
+    assert len(paths) == len(DEMO_PROFILES) * len(DEMO_CASES) * 3
     records = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
     assert all(record["synthetic"] is True for record in records)
     assert {record["model_configuration"]["kind"] for record in records} == {

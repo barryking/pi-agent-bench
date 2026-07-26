@@ -6,7 +6,6 @@ import argparse
 import json
 
 from .agent_profiles import load_agent_profiles
-from .dataset import load_cases
 from .model_profiles import load_profiles
 from .versions import FRAMEWORK_VERSION, INSPECT_VERSION, PI_VERSION, SANDBOX_IMAGE
 
@@ -27,7 +26,6 @@ def _command_new_case(args: argparse.Namespace) -> None:
 
     try:
         paths = scaffold_case(
-            args.phase,
             args.id,
             args.dataset,
             dataset_version=args.dataset_version,
@@ -40,18 +38,13 @@ def _command_new_case(args: argparse.Namespace) -> None:
 
 
 def _command_validate(args: argparse.Namespace) -> None:
-    cases = load_cases(args.dataset)
-    phases = sorted({case.phase for case in cases})
-    if len(phases) != 1:
-        raise SystemExit("dataset must contain exactly one phase")
-    if phases[0] in {"planning", "coding"}:
-        from .inspect_tasks import load_case_suite
+    from .inspect_tasks import load_case_suite
 
-        try:
-            load_case_suite(args.dataset, phases[0])
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from exc
-    print(f"valid: {len(cases)} case(s); phases={','.join(phases)}")
+    try:
+        _, cases, version = load_case_suite(args.dataset)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(f"valid: {len(cases)} outcome case(s); dataset-version={version}")
 
 
 def _command_model_profiles(args: argparse.Namespace) -> None:
@@ -62,8 +55,7 @@ def _command_model_profiles(args: argparse.Namespace) -> None:
 def _command_agent_profiles(args: argparse.Namespace) -> None:
     for profile in load_agent_profiles(args.agent_profiles_file).values():
         print(
-            f"{profile.name}: planning-tools={','.join(profile.tools_for('planning'))}; "
-            f"coding-tools={','.join(profile.tools_for('coding'))}; "
+            f"{profile.name}: tools={','.join(profile.tools)}; "
             f"resources={_agent_resource_count(profile)}"
         )
 
@@ -89,10 +81,10 @@ def _command_versions(_args: argparse.Namespace) -> None:
 
 
 def _command_replay(args: argparse.Namespace) -> None:
-    from .replay import replay_coding_log
+    from .replay import replay_outcome_log
 
     try:
-        paths = replay_coding_log(args.log_file, args.output_dir)
+        paths = replay_outcome_log(args.log_file, args.output_dir)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     for path in paths:
@@ -102,10 +94,10 @@ def _command_replay(args: argparse.Namespace) -> None:
 
 
 def _command_prove(args: argparse.Namespace) -> None:
-    from .case_proof import prove_coding_case
+    from .case_proof import prove_outcome_case
 
     try:
-        path = prove_coding_case(args.dataset, args.known_good_diff, args.output)
+        path = prove_outcome_case(args.dataset, args.known_good_diff, args.output)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     print(f"proved: {path}")

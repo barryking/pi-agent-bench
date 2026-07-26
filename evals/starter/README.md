@@ -1,50 +1,39 @@
 # Owned starter suite
 
-These five cases use code owned by this project. A fresh clone already has
-everything needed to run them.
+This suite has five complete repository jobs:
 
-The suite covers:
+- user filtering and pagination validation;
+- configuration precedence with false and empty values;
+- webhook signature checking;
+- cursor pagination in a Node client; and
+- durable SQLite idempotency.
 
-1. filtering and validating an API-style user list;
-2. fixing configuration precedence for false and empty values;
-3. checking signed webhooks safely;
-4. collecting cursor-paginated API results in Node; and
-5. making SQLite user creation durable and idempotent.
+The starting repositories and verifiers are owned by this project. No outside repository is
+downloaded.
 
-Each job has a planning case and a coding case. The coding checks are protected
-from Pi inside Docker.
-
-Maintainers prove all five coding cases in both directions with:
+Each case must fail before the requested work and pass after a known-good
+solution. Maintainers check all five with:
 
 ```bash
 python scripts/check-starter-verifiers.py
 ```
 
-The untouched fixture must fail. The reference overlay must pass every
-critical check. Reference overlays are test evidence and are not mounted into
-an agent trial.
-
-Start with one cloud profile:
+Validate the dataset:
 
 ```bash
-pi-bench run coding \
-  --dataset evals/starter/coding.jsonl \
+pi-bench validate evals/starter/cases.jsonl
+```
+
+Run one model:
+
+```bash
+pi-bench run \
   --model-profile hosted-quality \
   --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
-  --campaign starter-check
+  --dataset evals/starter/cases.jsonl \
+  --campaign starter-outcome-v1
 ```
 
-Use three trials per model for a comparison:
-
-```bash
-pi-bench campaign coding \
-  --dataset evals/starter/coding.jsonl \
-  --model-profile hosted-quality \
-  --model-profile local-candidate \
-  --model-profiles-file configs/model-baselines.local.json \
-  --env-file .env.local \
-  --campaign starter-baseline-v1 \
-  --epochs 3 \
-  --resume
-```
+Run several models or agent profiles with `pi-bench campaign`. Every setup gets
+the same starting repositories and final verifiers.

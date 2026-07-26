@@ -19,10 +19,7 @@ def base_profile():
     return {
         "description": "A test agent.",
         "trust_mode": "no-approve",
-        "tools": {
-            "planning": ["read", "grep"],
-            "coding": ["read", "bash", "edit"],
-        },
+        "tools": ["read", "bash", "edit"],
         "runtime_env": {},
         "settings": {},
         "context_files": [],
@@ -46,7 +43,7 @@ def test_loads_and_fingerprints_selected_resources(tmp_path):
     loaded = load_agent_profiles(config)["test-agent"]
     identity = loaded.public_identity()
 
-    assert loaded.tools_for("planning") == ("read", "grep")
+    assert loaded.tools == ("read", "bash", "edit")
     assert identity["profile"] == "test-agent"
     assert identity["configuration"]["resources"]["context_files"][0]["files"] == 1
     assert str(tmp_path) not in json.dumps(identity)
@@ -79,9 +76,7 @@ def test_rejects_symbolic_link_resources(tmp_path):
 
     loaded = load_agent_profiles(config)["test-agent"]
 
-    assert loaded.readiness_errors() == [
-        "linked: resource paths cannot be symbolic links"
-    ]
+    assert loaded.readiness_errors() == ["linked: resource paths cannot be symbolic links"]
 
 
 def test_runtime_environment_records_names_but_not_secret_values(tmp_path):
@@ -91,9 +86,9 @@ def test_runtime_environment_records_names_but_not_secret_values(tmp_path):
     write_profiles(config, profile)
     loaded = load_agent_profiles(config)["test-agent"]
 
-    assert loaded.resolved_runtime_env(
-        {"PRIVATE_AGENT_TOKEN": "do-not-record-this"}
-    ) == {"MY_TOOL_TOKEN": "do-not-record-this"}
+    assert loaded.resolved_runtime_env({"PRIVATE_AGENT_TOKEN": "do-not-record-this"}) == {
+        "MY_TOOL_TOKEN": "do-not-record-this"
+    }
     assert "do-not-record-this" not in json.dumps(loaded.public_identity())
     with pytest.raises(ValueError, match="PRIVATE_AGENT_TOKEN"):
         loaded.resolved_runtime_env({})
@@ -120,7 +115,7 @@ def test_rejects_mcp_server_without_its_extension(tmp_path):
             "tools": ["issue_search"],
         }
     ]
-    profile["tools"]["planning"].append("issue_search")
+    profile["tools"].append("issue_search")
     config = tmp_path / "profiles.json"
     write_profiles(config, profile)
 
@@ -152,7 +147,7 @@ def test_rejects_mcp_tools_that_pi_cannot_use(tmp_path):
 
     assert loaded.readiness_errors() == [
         "test-agent: MCP server 'issues' has tools that are not enabled for "
-        "planning or coding: issue_search"
+        "this outcome: issue_search"
     ]
 
 
@@ -188,6 +183,7 @@ def test_owned_agent_profile_examples_are_complete_and_ready():
 
     assert set(profiles) == {
         "example-guidance",
+        "example-plan-first",
         "example-skill",
         "example-extension",
         "example-prompt-template",
@@ -196,7 +192,7 @@ def test_owned_agent_profile_examples_are_complete_and_ready():
     }
     assert all(profile.readiness_errors() == [] for profile in profiles.values())
     everything = profiles["example-everything"]
-    assert everything.tools_for("coding")[-2:] == (
+    assert everything.tools[-2:] == (
         "repository_info",
         "example_catalog_lookup",
     )

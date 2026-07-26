@@ -43,6 +43,9 @@ git clone https://github.com/barryking/pi-agent-bench.git
 cd pi-agent-bench
 ```
 
+Use Pi Agent Bench from this clone. Do not install only the Python package:
+the cases, verifiers, Docker files, and dashboard are also required.
+
 ## 3. Run the setup script
 
 ```bash
@@ -125,8 +128,8 @@ Fix every message before running a benchmark.
 ## 6. Run a small test
 
 ```bash
-pi-bench run coding \
-  --dataset evals/starter/coding.jsonl \
+pi-bench run \
+  --dataset evals/starter/cases.jsonl \
   --model-profile hosted-quality \
   --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
@@ -193,7 +196,7 @@ Logs and results stay on the Mac. Git ignores them.
 To remove only the reusable Docker image:
 
 ```bash
-docker image rm pi-agent-bench-sandbox:0.5.0
+docker image rm pi-agent-bench-sandbox:0.6.0
 ```
 
 Do this only when you mean to rebuild it.

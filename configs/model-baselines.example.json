@@ -44,19 +44,6 @@
         "role": "price-performance-control"
       }
     },
-    "independent-grader": {
-      "kind": "hosted",
-      "model": "openai/replace-with-independent-grader-model",
-      "runtime_env": {
-        "OPENAI_API_KEY": "INDEPENDENT_GRADER_API_KEY"
-      },
-      "configuration": {
-        "provider": "replace-with-provider",
-        "model_revision": "replace-with-version-or-snapshot",
-        "cost_currency": "USD",
-        "role": "planning-grader"
-      }
-    },
     "openai-codex-gpt-5.6-sol": {
       "kind": "hosted",
       "model": "openai-codex/gpt-5.6-sol",

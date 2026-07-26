@@ -74,8 +74,6 @@
         _index: index,
         _time: row.started_at ? new Date(row.started_at).getTime() : index
       }));
-      const phases = unique(state.all.map(row => row.phase));
-      setOptions("phase", phases, phases.includes("coding") ? "coding" : phases[0]);
       refreshCohortControls();
       const metrics = unique(state.all.map(row => row.metric));
       $("metric").innerHTML = metrics.map(metric => optionHtml(metric, label(metric))).join("");
@@ -85,9 +83,8 @@
     }
 
     function refreshCohortControls() {
-      const phaseRows = state.all.filter(row => row.phase === $("phase").value);
-      setOptions("dataset", unique(phaseRows.map(row => row.dataset_version)));
-      const versionRows = phaseRows.filter(row => row.dataset_version === $("dataset").value);
+      setOptions("dataset", unique(state.all.map(row => row.dataset_version)));
+      const versionRows = state.all.filter(row => row.dataset_version === $("dataset").value);
       setOptions("campaign", unique(versionRows.map(row => row.campaign)), "default");
       const campaignRows = versionRows.filter(row => row.campaign === $("campaign").value);
       setOptions("cache", unique(campaignRows.map(row => row.cache_state)), "unspecified");
@@ -95,7 +92,6 @@
 
     function render() {
       state.rawCohort = state.all.filter(row =>
-        row.phase === $("phase").value &&
         row.dataset_version === $("dataset").value &&
         row.campaign === $("campaign").value &&
         row.cache_state === $("cache").value
@@ -134,7 +130,7 @@
       renderCoverage();
       renderDetails();
       $("cohort-label").textContent =
-        `${$("phase").value} · dataset ${$("dataset").value} · ${$("campaign").value} · ${$("cache").value} cache`;
+        `outcomes · dataset ${$("dataset").value} · ${$("campaign").value} · ${$("cache").value} cache`;
     }
 
     function buildSummaries(rows) {

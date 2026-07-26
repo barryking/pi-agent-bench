@@ -25,7 +25,6 @@ from .cli_commands import (
 from .cli_execution import (
     _campaign,
     _doctor,
-    _rescore_planning,
     _resolve_agent_profile,
     _resolve_model_profile,
     _run,
@@ -45,8 +44,7 @@ def main() -> None:
         "doctor": _command_doctor,
         "run": _run,
         "campaign": _campaign,
-        "rescore-planning": _rescore_planning,
-        "replay-coding": _command_replay,
+        "replay-outcome": _command_replay,
         "prove-case": _command_prove,
         "export": _command_export,
         "report": _command_report,
@@ -106,9 +104,7 @@ def _start_inspect_view(
 ) -> subprocess.Popen:
     inspect_executable = Path(sys.executable).with_name("inspect")
     if not inspect_executable.is_file():
-        raise SystemExit(
-            "Inspect CLI is missing from this environment; reinstall Pi Agent Bench"
-        )
+        raise SystemExit("Inspect CLI is missing from this environment; reinstall Pi Agent Bench")
     source = logs_dir.expanduser().resolve()
     source.mkdir(parents=True, exist_ok=True)
     command = [

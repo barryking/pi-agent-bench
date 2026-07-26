@@ -1,4 +1,4 @@
-"""Replay Pi Agent Bench coding diffs."""
+"""Replay Pi Agent Bench outcome diffs."""
 
 from __future__ import annotations
 
@@ -11,44 +11,43 @@ from typing import Any
 
 from inspect_ai.log import read_eval_log
 
+from .repository import REPOSITORY_ROOT
 from .verification import finite_number, primary_score, quality_value, verifier_payload
 from .versions import SANDBOX_IMAGE
 from .workspace import prepare_workspace, remove_docker_workspace_contents
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
-
-def replay_coding_log(
+def replay_outcome_log(
     log_file: str | Path,
     output_dir: str | Path = "results/replay",
 ) -> list[Path]:
-    """Reconstruct coding workspaces, apply saved diffs, and rerun verifiers."""
+    """Reconstruct outcome workspaces, apply saved diffs, and rerun verifiers."""
     source = Path(log_file).expanduser().resolve()
     if not source.is_file():
         raise ValueError(f"Inspect log does not exist: {source}")
     log = read_eval_log(source)
     if str(log.status) != "success":
-        raise ValueError(f"coding replay requires a successful log, got {log.status}")
+        raise ValueError(f"outcome replay requires a successful log, got {log.status}")
     samples = log.samples or []
-    if not samples or any(sample.metadata.get("phase") != "coding" for sample in samples):
-        raise ValueError("coding replay requires a completed coding Inspect log")
+    if not samples:
+        raise ValueError("outcome replay requires a completed outcome Inspect log")
 
     destination = Path(output_dir).expanduser().resolve()
     destination.mkdir(parents=True, exist_ok=True)
-    replay_root = REPOSITORY_ROOT / "repos"
+    replay_root = REPOSITORY_ROOT / "workspaces"
     replay_root.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
 
     for sample in samples:
         _, score = primary_score(sample.scores or {})
         if score is None:
-            raise ValueError(f"{sample.id}: coding log has no score")
+            raise ValueError(f"{sample.id}: outcome log has no score")
         metadata = score.metadata or {}
         final_diff = metadata.get("final_diff")
         if not isinstance(final_diff, str):
-            raise ValueError(f"{sample.id}: coding score has no saved final diff")
-        fixture = _resolve_fixture(
-            sample.metadata.get("fixture"),
+            raise ValueError(f"{sample.id}: outcome score has no saved final diff")
+        starting_repository = _resolve_starting_repository(
+            sample.metadata.get("starting_repository"),
             log.eval.metadata.get("dataset_path") if log.eval.metadata else None,
         )
         verifier = (
@@ -67,7 +66,7 @@ def replay_coding_log(
         ) as temporary:
             workspace = Path(temporary) / "workspace"
             try:
-                prepare_workspace(fixture, final_diff, workspace)
+                prepare_workspace(starting_repository, final_diff, workspace)
                 completed = subprocess.run(
                     [
                         "docker",
@@ -102,7 +101,7 @@ def replay_coding_log(
             "source_inspect_log": str(source),
             "replayed_at": datetime.now(UTC).isoformat(),
             "sandbox_image": SANDBOX_IMAGE,
-            "fixture": str(fixture),
+            "starting_repository": str(starting_repository),
             "verifier_command": verifier,
             "original_quality": original_quality,
             "replay_quality": replay_quality,
@@ -118,9 +117,7 @@ def replay_coding_log(
                 "payload": payload,
             },
         }
-        path = destination / (
-            f"{log.eval.run_id}__{sample.id}__trial-{sample.epoch}.replay.json"
-        )
+        path = destination / (f"{log.eval.run_id}__{sample.id}__trial-{sample.epoch}.replay.json")
         path.write_text(
             json.dumps(record, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
@@ -129,9 +126,9 @@ def replay_coding_log(
     return written
 
 
-def _resolve_fixture(value: Any, dataset_path: Any) -> Path:
+def _resolve_starting_repository(value: Any, dataset_path: Any) -> Path:
     if not isinstance(value, str) or not value:
-        raise ValueError("coding sample has no fixture path")
+        raise ValueError("outcome sample has no starting_repository path")
     requested = Path(value).expanduser()
     candidates = [requested] if requested.is_absolute() else []
     if isinstance(dataset_path, str) and dataset_path:
@@ -141,4 +138,4 @@ def _resolve_fixture(value: Any, dataset_path: Any) -> Path:
         resolved = candidate.resolve()
         if resolved.is_dir():
             return resolved
-    raise ValueError(f"coding fixture does not exist: {candidates[-1].resolve()}")
+    raise ValueError(f"outcome starting_repository does not exist: {candidates[-1].resolve()}")
