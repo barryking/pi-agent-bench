@@ -10,6 +10,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from pi_agent_bench.workspace import remove_docker_workspace_contents
+
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "evals" / "starter" / "coding.jsonl"
 SOLUTIONS = ROOT / "tests" / "starter_solutions"
@@ -81,33 +83,43 @@ def main() -> int:
     ]
     with tempfile.TemporaryDirectory(prefix="starter-verifiers-") as temporary:
         root = Path(temporary)
-        for case in cases:
-            case_id = case["id"]
-            fixture = ROOT / case["metadata"]["fixture"]
-            workspace = root / case_id
-            prepare(fixture, workspace)
-            before = verifier_result(workspace, case["expected"]["verifier_command"])
-            threshold = float(case["expected"]["success_threshold"])
-            if float(before.get("score", 1.0)) >= threshold:
-                raise RuntimeError(f"{case_id}: untouched fixture unexpectedly passed")
-
-            shutil.copytree(SOLUTIONS / case_id, workspace, dirs_exist_ok=True)
-            after = verifier_result(workspace, case["expected"]["verifier_command"])
-            components = after.get("components", {})
-            missing = [
-                name
-                for name in case["expected"]["required_components"]
-                if components.get(name) != 1.0
-            ]
-            if float(after.get("score", 0.0)) < threshold or missing:
-                raise RuntimeError(
-                    f"{case_id}: reference solution failed; "
-                    f"score={after.get('score')}, missing={missing}, "
-                    f"explanation={after.get('explanation')}"
+        try:
+            for case in cases:
+                case_id = case["id"]
+                fixture = ROOT / case["metadata"]["fixture"]
+                workspace = root / case_id
+                prepare(fixture, workspace)
+                before = verifier_result(
+                    workspace, case["expected"]["verifier_command"]
                 )
-            print(
-                f"proved: {case_id}; before={before['score']}; after={after['score']}"
-            )
+                threshold = float(case["expected"]["success_threshold"])
+                if float(before.get("score", 1.0)) >= threshold:
+                    raise RuntimeError(
+                        f"{case_id}: untouched fixture unexpectedly passed"
+                    )
+
+                shutil.copytree(SOLUTIONS / case_id, workspace, dirs_exist_ok=True)
+                after = verifier_result(
+                    workspace, case["expected"]["verifier_command"]
+                )
+                components = after.get("components", {})
+                missing = [
+                    name
+                    for name in case["expected"]["required_components"]
+                    if components.get(name) != 1.0
+                ]
+                if float(after.get("score", 0.0)) < threshold or missing:
+                    raise RuntimeError(
+                        f"{case_id}: reference solution failed; "
+                        f"score={after.get('score')}, missing={missing}, "
+                        f"explanation={after.get('explanation')}"
+                    )
+                print(
+                    f"proved: {case_id}; "
+                    f"before={before['score']}; after={after['score']}"
+                )
+        finally:
+            remove_docker_workspace_contents(root, IMAGE)
     return 0
 
 

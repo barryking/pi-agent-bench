@@ -13,7 +13,7 @@ from typing import Any
 from .inspect_tasks import load_case_suite
 from .verification import finite_number, verifier_payload
 from .versions import SANDBOX_IMAGE
-from .workspace import prepare_workspace
+from .workspace import prepare_workspace, remove_docker_workspace_contents
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -43,12 +43,15 @@ def prove_coding_case(
     temporary_parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".case-proof-", dir=temporary_parent) as temporary:
         root = Path(temporary)
-        before_workspace = root / "before"
-        after_workspace = root / "after"
-        prepare_workspace(fixture, "", before_workspace)
-        prepare_workspace(fixture, patch, after_workspace)
-        before = _run_verifier(before_workspace, case.expected.verifier_command)
-        after = _run_verifier(after_workspace, case.expected.verifier_command)
+        try:
+            before_workspace = root / "before"
+            after_workspace = root / "after"
+            prepare_workspace(fixture, "", before_workspace)
+            prepare_workspace(fixture, patch, after_workspace)
+            before = _run_verifier(before_workspace, case.expected.verifier_command)
+            after = _run_verifier(after_workspace, case.expected.verifier_command)
+        finally:
+            remove_docker_workspace_contents(root, SANDBOX_IMAGE)
 
     proof = assess_case_proof(
         before,
