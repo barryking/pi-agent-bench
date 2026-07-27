@@ -60,8 +60,7 @@ sequenceDiagram
 
 The user runs Agent Bench on the Mac. Inspect also runs on the Mac and controls
 each clean trial. Pi and the protected verifier run inside the Docker
-container. A DGX or other model server only answers model requests. It does
-not receive your whole Mac filesystem.
+container. A DGX or other model server only answers model requests.
 
 ## Important words
 
