@@ -25,27 +25,43 @@ Inspect is the evaluation framework. This repository does not replace it.
 
 ```mermaid
 sequenceDiagram
-    participant Mac as Pi Agent Bench on the Mac
-    participant Inspect as Inspect
-    participant Sandbox as Docker sandbox
-    participant Pi as Pi coding agent
-    participant Model as Cloud or local model
+    actor User
 
-    Mac->>Inspect: Start a benchmark
-    Inspect->>Sandbox: Start a clean trial
-    Sandbox->>Pi: Give Pi the task and code
-    Pi->>Model: Ask for a response
-    Model-->>Pi: Return a response
-    Pi->>Sandbox: Read, edit, and test the code
-    Sandbox->>Sandbox: Run the protected verifier
-    Sandbox-->>Inspect: Send the outcome and score
-    Inspect-->>Mac: Save the full run log and score
-    Mac->>Mac: Build the comparison dashboard
+    box Mac
+        participant Bench as Agent Bench
+        participant Inspect as Inspect evaluation engine
+    end
+
+    box Docker container on the Mac
+        participant Pi as Pi coding agent
+        participant Verify as Protected verifier
+    end
+
+    box Inference location
+        participant Model as Cloud or local model
+    end
+
+    User->>Bench: Run a benchmark
+    Bench->>Inspect: Start the evaluation
+    Inspect->>Pi: Start a clean trial with the task and code
+
+    loop Agent work
+        Pi->>Model: Ask for a response
+        Model-->>Pi: Return a response
+        Pi->>Pi: Read, edit, and test the code
+    end
+
+    Inspect->>Verify: Check the finished workspace
+    Verify-->>Inspect: Return quality and success
+    Inspect-->>Bench: Return the log, score, and measurements
+    Bench->>Bench: Build comparison results
+    Bench-->>User: Show the dashboard and Inspect logs
 ```
 
-The Mac starts the benchmark and stores the results. Protected tests run in
-the clean container. A DGX or other model server only answers model requests.
-It does not receive your whole Mac filesystem.
+The user runs Agent Bench on the Mac. Inspect also runs on the Mac and controls
+each clean trial. Pi and the protected verifier run inside the Docker
+container. A DGX or other model server only answers model requests. It does
+not receive your whole Mac filesystem.
 
 ## Important words
 
