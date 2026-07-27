@@ -26,19 +26,19 @@ Inspect is the evaluation framework. This repository does not replace it.
 ```mermaid
 sequenceDiagram
     participant Mac as Pi Agent Bench on the Mac
-    participant Inspect as Inspect: runs, logs, and scores
-    participant Box as Docker: clean workspace
-    participant Pi as Pi: coding agent
-    participant Model as Model: cloud or local
+    participant Inspect as Inspect
+    participant Sandbox as Docker sandbox
+    participant Pi as Pi coding agent
+    participant Model as Cloud or local model
 
     Mac->>Inspect: Start a benchmark
-    Inspect->>Box: Start a clean trial
-    Box->>Pi: Give Pi the task and code
+    Inspect->>Sandbox: Start a clean trial
+    Sandbox->>Pi: Give Pi the task and code
     Pi->>Model: Ask for a response
     Model-->>Pi: Return a response
-    Pi->>Box: Read, edit, and test the code
-    Box->>Box: Run the protected verifier
-    Box-->>Inspect: Send the outcome and score
+    Pi->>Sandbox: Read, edit, and test the code
+    Sandbox->>Sandbox: Run the protected verifier
+    Sandbox-->>Inspect: Send the outcome and score
     Inspect-->>Mac: Save the full run log and score
     Mac->>Mac: Build the comparison dashboard
 ```
