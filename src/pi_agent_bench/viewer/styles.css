@@ -77,7 +77,7 @@
     }
     .filters {
       display: grid;
-      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      grid-template-columns: repeat(5, minmax(140px, 1fr));
       gap: 11px;
       padding: 14px;
       margin-bottom: 13px;
@@ -96,6 +96,8 @@
       color: var(--text);
     }
     .check-label input { accent-color: var(--green); }
+    .check-label span { display: grid; gap: 2px; }
+    .check-label small { color: var(--muted); font-size: 10px; }
     select, .file-button {
       width: 100%;
       min-height: 41px;
@@ -118,7 +120,9 @@
       padding: 17px 19px;
       border-bottom: 1px solid var(--line);
     }
-    h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+    h2, h3 { margin: 0; letter-spacing: -.02em; }
+    h2 { font-size: 17px; }
+    h3 { font-size: 15px; }
     .section-head span { color: var(--muted); font-size: 12px; text-align: right; }
     .table-scroll { overflow: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -134,15 +138,40 @@
     .model { font-weight: 600; }
     .model small { display: block; max-width: 280px; overflow: hidden; color: var(--muted); font-weight: 400; text-overflow: ellipsis; }
     .number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
-    .grid {
+    .metric-analysis {
+      margin-top: 13px;
+      overflow: hidden;
+    }
+    .analysis-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 17px 19px;
+      border-bottom: 1px solid var(--line);
+    }
+    .analysis-head span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .metric-grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 13px;
-      margin-top: 13px;
+    }
+    .analysis-chart {
+      min-width: 0;
+      padding: 18px;
+      position: relative;
+    }
+    .analysis-chart + .analysis-chart {
+      border-left: 1px solid var(--line);
     }
     .chart-panel { min-width: 0; padding: 18px; position: relative; }
     .primary-chart { margin-top: 13px; }
     .primary-chart .canvas-wrap { height: 420px; }
+    .secondary-chart { margin-top: 13px; }
     .chart-head {
       display: flex;
       justify-content: space-between;
@@ -151,11 +180,30 @@
       margin-bottom: 12px;
     }
     .chart-head span { color: var(--muted); font-size: 12px; }
+    .chart-head h2 + span,
+    .chart-head h3 + span { display: block; margin-top: 4px; }
+    .metric-control,
+    .analysis-chart .chart-head label { min-width: 190px; }
     .canvas-wrap { position: relative; width: 100%; height: 330px; }
     canvas { display: block; width: 100%; height: 100%; }
     .legend { display: flex; flex-wrap: wrap; gap: 13px; min-height: 18px; margin-top: 11px; }
     .legend-item { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
     .swatch { width: 9px; height: 9px; border-radius: 50%; }
+    .bubble-key {
+      display: inline-block;
+      border: 2px solid var(--green);
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--green) 45%, transparent);
+    }
+    .bubble-small { width: 10px; height: 10px; }
+    .bubble-large { width: 20px; height: 20px; }
+    .bubble-partial {
+      width: 15px;
+      height: 15px;
+      border-style: dashed;
+      background: color-mix(in srgb, var(--green) 25%, transparent);
+    }
+    .bubble-unavailable { width: 15px; height: 15px; background: transparent; }
     .tooltip {
       position: absolute;
       z-index: 2;
@@ -172,8 +220,18 @@
       line-height: 1.45;
     }
     .tooltip strong { display: block; margin-bottom: 2px; }
-    .trend-panel { margin-top: 13px; padding: 18px; position: relative; }
-    .trend-panel .canvas-wrap { height: 350px; }
+    .coverage-panel details summary {
+      padding: 13px 19px;
+      color: var(--green);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .coverage-panel details[open] summary {
+      border-bottom: 1px solid var(--line);
+    }
+    .coverage-missing { color: var(--red); }
+    .coverage-uneven { color: var(--amber); }
     .empty { display: grid; min-height: 220px; place-items: center; padding: 25px; color: var(--muted); text-align: center; }
     footer { margin-top: 15px; color: var(--muted); font-size: 12px; }
     .file-button {
@@ -189,14 +247,22 @@
     .error { color: var(--red); }
     @media (max-width: 1050px) {
       .filters { grid-template-columns: 1fr 1fr 1fr; }
-      .grid { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: 1fr; }
+      .analysis-chart + .analysis-chart {
+        border-top: 1px solid var(--line);
+        border-left: 0;
+      }
     }
     @media (max-width: 680px) {
       .shell { width: min(100% - 20px, 1480px); padding-top: 20px; }
       header { align-items: flex-start; flex-direction: column; }
       .filters { grid-template-columns: 1fr 1fr; }
       .notice { align-items: flex-start; }
-      .canvas-wrap, .trend-panel .canvas-wrap { height: 285px; }
+      .analysis-head,
+      .analysis-chart .chart-head { align-items: stretch; flex-direction: column; }
+      .metric-control,
+      .analysis-chart .chart-head label { min-width: 0; }
+      .canvas-wrap { height: 285px; }
     }
     @media (max-width: 430px) {
       .filters { grid-template-columns: 1fr; }

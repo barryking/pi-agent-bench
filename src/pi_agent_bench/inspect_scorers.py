@@ -69,6 +69,10 @@ def outcome_verifier_scorer(component_names: list[str] | None = None):
                 "pi_version": telemetry.pi_version,
                 "pi_wall_seconds": telemetry.wall_seconds,
                 "pi_return_code": telemetry.return_code,
+                "pi_direct_usage": telemetry.direct_usage,
+                "pi_direct_cost_reported_calls": telemetry.direct_cost_reported_calls,
+                "pi_observed_models": telemetry.observed_models,
+                "pi_unattributed_assistant_calls": telemetry.unattributed_assistant_calls,
             },
         )
 

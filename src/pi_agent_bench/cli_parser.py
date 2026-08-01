@@ -14,33 +14,35 @@ class _ExactArgumentParser(argparse.ArgumentParser):
         super().__init__(*args, **kwargs)
 
 
-def _add_model_and_agent_profile_arguments(parser: argparse.ArgumentParser) -> None:
+def _add_agent_profile_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "--model-profile",
+        "--agent-profile",
         required=True,
-        help="name of the model setup to use",
+        help="name of the complete runnable agent setup",
+    )
+    parser.add_argument(
+        "--agent-profiles-file",
+        type=Path,
+        default=Path("configs/agent-profiles.local.json"),
+        help="JSON file containing composed agent profiles",
+    )
+    parser.add_argument(
+        "--pi-profiles-file",
+        type=Path,
+        default=Path("configs/pi-profiles.local.json"),
+        help="JSON file containing reusable Pi profiles",
     )
     parser.add_argument(
         "--model-profiles-file",
         type=Path,
-        default=Path("configs/model-baselines.example.json"),
+        default=Path("configs/model-baselines.local.json"),
         help="JSON file containing model profiles",
     )
     parser.add_argument(
         "--env-file",
         type=Path,
+        default=Path(".env.local"),
         help="optional ignored KEY=VALUE file, normally .env.local",
-    )
-    parser.add_argument(
-        "--agent-profile",
-        default="vanilla",
-        help="exact Pi tools and resources to use (default: vanilla)",
-    )
-    parser.add_argument(
-        "--agent-profiles-file",
-        type=Path,
-        default=Path("configs/agent-profiles.json"),
-        help="JSON file containing agent profiles",
     )
 
 
@@ -56,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     new_case = subparsers.add_parser(
         "new-case",
-        help="scaffold one complete repository-outcome benchmark case",
+        help="scaffold one draft candidate repository-outcome case",
     )
     new_case.add_argument("--id", required=True)
     new_case.add_argument("--dataset", type=Path, required=True)
@@ -72,19 +74,39 @@ def build_parser() -> argparse.ArgumentParser:
     model_profiles.add_argument(
         "--model-profiles-file",
         type=Path,
-        default=Path("configs/model-baselines.example.json"),
+        default=Path("configs/model-baselines.local.json"),
         help="JSON file containing model profiles",
     )
 
     agent_profiles = subparsers.add_parser(
         "agent-profiles",
-        help="list reproducible Pi agent profiles",
+        help="list complete runnable agent profiles",
     )
     agent_profiles.add_argument(
         "--agent-profiles-file",
         type=Path,
-        default=Path("configs/agent-profiles.json"),
-        help="JSON file containing agent profiles",
+        default=Path("configs/agent-profiles.local.json"),
+        help="JSON file containing composed agent profiles",
+    )
+    agent_profiles.add_argument(
+        "--pi-profiles-file",
+        type=Path,
+        default=Path("configs/pi-profiles.local.json"),
+    )
+    agent_profiles.add_argument(
+        "--model-profiles-file",
+        type=Path,
+        default=Path("configs/model-baselines.local.json"),
+    )
+
+    pi_profiles = subparsers.add_parser(
+        "pi-profiles",
+        help="list reusable Pi harness profiles",
+    )
+    pi_profiles.add_argument(
+        "--pi-profiles-file",
+        type=Path,
+        default=Path("configs/pi-profiles.local.json"),
     )
 
     subparsers.add_parser("versions", help="show pinned framework and harness versions")
@@ -95,12 +117,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor = subparsers.add_parser(
         "doctor",
-        help="check local prerequisites and one model-and-agent setup",
+        help="check local prerequisites and one complete agent profile",
     )
-    _add_model_and_agent_profile_arguments(doctor)
+    _add_agent_profile_arguments(doctor)
 
     run = subparsers.add_parser("run", help="run an Inspect outcome suite")
-    _add_model_and_agent_profile_arguments(run)
+    _add_agent_profile_arguments(run)
     run.add_argument("--logs-dir", type=Path, default=Path("logs"))
     run.add_argument("--results-dir", type=Path, default=Path("results"))
     run.add_argument(
@@ -114,6 +136,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--run-name",
         default="default",
         help="short name for this benchmark run",
+    )
+    run.add_argument(
+        "--benchmark-id",
+        help="campaign ID shared by comparison arms; generated automatically when omitted",
     )
     run.add_argument(
         "--cache-state",
@@ -145,30 +171,30 @@ def build_parser() -> argparse.ArgumentParser:
 
     benchmark = subparsers.add_parser(
         "benchmark",
-        help="run the same suite across several model-and-agent setups",
+        help="run the same suite across several complete agent profiles",
     )
     benchmark.add_argument(
-        "--model-profile",
+        "--agent-profile",
         action="append",
         required=True,
-        help="model profile to run; repeat for each local or hosted model",
+        help="complete agent profile to run; repeat to compare profiles",
+    )
+    benchmark.add_argument(
+        "--agent-profiles-file",
+        type=Path,
+        default=Path("configs/agent-profiles.local.json"),
+        help="JSON file containing composed agent profiles",
+    )
+    benchmark.add_argument(
+        "--pi-profiles-file",
+        type=Path,
+        default=Path("configs/pi-profiles.local.json"),
     )
     benchmark.add_argument(
         "--model-profiles-file",
         type=Path,
         default=Path("configs/model-baselines.local.json"),
-        help="JSON file containing model profiles",
-    )
-    benchmark.add_argument(
-        "--agent-profile",
-        action="append",
-        help=("agent profile to run; repeat to compare several Pi setups (default: vanilla)"),
-    )
-    benchmark.add_argument(
-        "--agent-profiles-file",
-        type=Path,
-        default=Path("configs/agent-profiles.json"),
-        help="JSON file containing agent profiles",
+        help="JSON file containing reusable model resources",
     )
     benchmark.add_argument("--env-file", type=Path, default=Path(".env.local"))
     benchmark.add_argument("--logs-dir", type=Path, default=Path("logs"))
@@ -183,6 +209,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--run-name",
         required=True,
         help="short name shared by every setup in this benchmark run",
+    )
+    benchmark.add_argument(
+        "--benchmark-id",
+        help="campaign ID to resume or extend; generated automatically when omitted",
     )
     benchmark.add_argument(
         "--cache-state",
@@ -211,7 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     prove = subparsers.add_parser(
         "prove-case",
-        help="prove that one outcome case fails before and passes after a known-good patch",
+        help="maintainer check: prove a case fails before and passes after a known-good patch",
     )
     prove.add_argument("dataset", type=Path)
     prove.add_argument("--known-good-diff", type=Path, required=True)

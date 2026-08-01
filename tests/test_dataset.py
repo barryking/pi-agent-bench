@@ -50,6 +50,19 @@ def test_total_token_budget_is_separate_from_context(tmp_path):
     assert loaded.limits.total_tokens == 12000
 
 
+def test_accepts_multi_page_prd_style_instruction(tmp_path):
+    case = outcome_case()
+    case["instruction"] = "\n\n".join(
+        f"Requirement {number}: implement and verify this observable behaviour."
+        for number in range(300)
+    )
+
+    loaded = load_cases(write_cases(tmp_path, case))[0]
+
+    assert "Requirement 299" in loaded.instruction
+    assert len(loaded.instruction) > 10_000
+
+
 def test_rejects_duplicate_ids(tmp_path):
     path = write_cases(tmp_path, outcome_case(), outcome_case())
 

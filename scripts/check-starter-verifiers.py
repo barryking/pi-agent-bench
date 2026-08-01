@@ -82,6 +82,27 @@ def main() -> int:
         for line in DATASET.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+    first_verifier = cases[0]["expected"]["verifier_command"][1]
+    protected = run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            IMAGE,
+            "python3",
+            "-c",
+            (
+                "import os, sys; "
+                "raise SystemExit(0 if not os.access(sys.argv[1], os.R_OK) else 1)"
+            ),
+            first_verifier,
+        ]
+    )
+    if protected.returncode:
+        raise RuntimeError(
+            f"Pi sandbox user can read protected verifier {first_verifier}"
+        )
+    print("proved: protected verifiers are unreadable to the Pi sandbox user")
     with tempfile.TemporaryDirectory(prefix="starter-verifiers-") as temporary:
         root = Path(temporary)
         try:

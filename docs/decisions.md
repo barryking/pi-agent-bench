@@ -2,64 +2,115 @@
 
 ## Use Inspect
 
-Inspect owns runs, limits, logs, scores, and detailed evidence.
-
-Pi Agent Bench adds the Pi connection, clean Docker sandbox, ready-to-run
-cases, protected verifiers, model and agent profiles, and comparison dashboard.
+Inspect owns execution, limits, logs, model calls, scores, and detailed
+evidence. Pi Agent Bench adds only the Pi adapter, clean sandbox, profiles,
+cases, protected verification, generated comparison identity, and reports.
 
 ## Measure the finished outcome
 
-A case asks for one finished repository result.
+A case asks for one observable repository result. Protected executable checks,
+not similarity to one reference patch or another model's opinion, determine
+quality and success.
 
-Why: users care whether the job was completed well and quickly.
+## Treat case maturity as a lifecycle
 
-## Keep agent profiles general
+There is no permanent pilot case type. A new case begins as a non-runnable
+draft, passes structural validation and a known-good proof, then receives real
+candidate trials before acceptance into a maintained dataset.
 
-Agent profiles can change instructions, tools, skills, extensions, prompts,
-settings, MCP, and other Pi behaviour.
+`prove-case` is a maintainer authoring check, not a per-run user prerequisite.
+It demonstrates untouched failure and one known-good success. Candidate trials
+remain necessary to assess difficulty, stability, limits, and ambiguous
+instructions.
 
-Why: many agent changes can affect time and quality. The profile name and
-content fingerprint record the whole setup without inventing special switches.
+External source under `local-repos/` does not define a different case class.
+It is only an ignored location for a pinned third-party or private starting
+repository.
 
-## Prefer executable evidence
+## Compare complete agent profiles
 
-Protected verifiers and required behaviour decide final quality and success.
+The primary benchmark unit is `AgentProfile`: one `PiProfile`, an ordered set of
+model resources, and a default resource.
 
-Why: there may be many correct patches. A hidden test contract is fairer than
-comparing against one reference patch.
+This represents the system teams actually run—guidance, tools, skills,
+extensions, settings, MCP access, and every available model. A model-only
+baseline is two otherwise-identical agent profiles with different single
+resources.
 
-## Keep the model and agent separate
+## Keep reusable components separate
 
-A model profile says which inference model and settings to use.
+- `PiProfile` defines Pi harness behaviour.
+- `ModelProfile` defines one concrete inference resource.
+- `AgentProfile` composes them into a runnable comparison unit.
 
-An agent profile says how Pi is configured.
+There is no `BenchmarkProfile`, semantic model-role schema, or benchmark-owned
+router. Selected Pi extensions may switch among configured resources through
+Pi's native registry.
 
-This lets us compare:
+## Bridge models through Inspect when possible
 
-- several models with vanilla Pi;
-- several agent setups on one model; or
-- every selected model-and-agent combination.
+Local OpenAI-compatible endpoints, normal cloud APIs, and OpenRouter are
+independently instantiated Inspect models and exposed to Pi as
+`inspect-bridge/<resource-name>`.
 
-## Use clean containers
+Pi-direct execution is reserved for provider/authentication paths Inspect
+cannot instantiate, initially OpenAI Codex subscription OAuth. Bridged secrets
+remain on the host; selected direct authentication alone is staged.
 
-Every trial gets a new Docker workspace and a private temporary Pi home.
-Personal Pi resources are not loaded by accident.
+## Enforce one profile-wide run boundary
 
-## Put scores in Inspect first
+Every Pi invocation—bridge-only, direct-only, or hybrid—is wrapped by the same
+turn/token supervisor and sandbox timeout. Inspect remains authoritative for
+bridged usage. Pi events supply only direct-attributed usage. Merged totals
+never add Pi bridge events a second time.
 
-Inspect logs are the source evidence. Dashboard files are disposable exports.
+## Isolate project-owned Pi configuration
 
-## Compare only matching cohorts
+Runs always pass `--no-approve`. The selected Pi profile is staged into an
+isolated global Pi home. Repository `.pi` and `.agents/skills` resources cannot
+silently change the harness.
 
-Rankings require the same case version, verifier fingerprint, limits, Pi
-version, container, and case coverage. Use at least three trials per setup and
-case before trusting small differences.
+Repository `AGENTS.md` and `CLAUDE.md` context files remain enabled because
+they are part of the case input and starting-repository fingerprint.
 
-The benchmark records the Docker image ID and the source fingerprint used to
-build it. A run stops when the image is stale. This prevents a result from
-claiming verifier code that was not inside its container.
+## Protect verification
 
-## Main comparison
+Verifier source stays root-owned under `/opt/verifiers`, unreadable by the Pi
+user, and outside `/workspace`. A case must use exactly:
 
-The default view is quality against total outcome time. Upper-left is better:
-more quality in less time.
+```text
+python3 /opt/verifiers/<case-id>/verify.py
+```
+
+## Separate profile identity from cohort identity
+
+The composed profile fingerprint changes with its Pi profile, resource
+bindings, resource order, or default. The generated cohort fingerprint changes
+with use-case inputs, repositories, verifiers, scoring, limits, shared run
+conditions, Pi/Inspect versions, execution-protocol source, or sandbox runtime.
+
+Profile definition files are deliberately excluded from cohort identity, so
+different profiles can remain valid comparison arms.
+
+Planned trial count is campaign metadata rather than cohort input. This permits
+later campaigns to add compatible evidence. Equal completed trial coverage is
+still required before profiles receive a shared ranking. One `benchmark_id`
+links the profile arms from a single invocation and prevents repeated campaigns
+with the same trial numbers from being matched to one another.
+
+## Report missing measurements honestly
+
+Unavailable fields are `null`; zero means measured zero. Inference cost
+coverage is:
+
+- `complete`: local-only, or every used cloud call reports cost;
+- `partial`: some used cloud cost is reported and some is missing;
+- `unavailable`: cloud inference occurred and none of it reported cost.
+
+Provider inference cost is not total cost of ownership.
+
+## Compare only matching evidence
+
+Rankings require one generated cohort identity, equal case coverage, equal
+completed trial counts, and at least three trials per profile and case before
+small differences are trusted.

@@ -1,198 +1,156 @@
 import json
-from pathlib import Path
 
 import pytest
 
 from pi_agent_bench.agent_profiles import load_agent_profiles
+from pi_agent_bench.model_profiles import ModelProfile
+from pi_agent_bench.pi_profiles import vanilla_pi_profile
 
-ROOT = Path(__file__).resolve().parents[1]
+
+def model(name, *, mode="inspect-bridge", provider="openai-codex", direct_model=None):
+    execution = (
+        {
+            "mode": "inspect-bridge",
+            "model_args": {},
+            "model_args_env": {},
+            "generate_config": {},
+        }
+        if mode == "inspect-bridge"
+        else {
+            "mode": "pi-direct",
+            "provider": provider,
+            "model": direct_model or name,
+            "auth_file_env": "PI_AUTH_FILE",
+        }
+    )
+    return ModelProfile.from_dict(
+        name,
+        {
+            "kind": "hosted",
+            "model": f"openai/{name}",
+            "execution": execution,
+            "capabilities": {
+                "context_tokens": 32768,
+                "max_output_tokens": 8192,
+                "reasoning": True,
+                "input": ["text"],
+            },
+            "configuration": {"model_revision": f"{name}-revision"},
+        },
+    )
 
 
-def write_profiles(path, profile):
+def write_profile(tmp_path, value):
+    path = tmp_path / "agents.json"
     path.write_text(
-        json.dumps({"version": 1, "profiles": {"test-agent": profile}}),
+        json.dumps({"version": 1, "profiles": {"test-agent": value}}),
         encoding="utf-8",
     )
+    return path
 
 
-def base_profile():
+def base_value():
     return {
-        "description": "A test agent.",
-        "trust_mode": "no-approve",
-        "tools": ["read", "bash", "edit"],
-        "runtime_env": {},
-        "settings": {},
-        "context_files": [],
-        "system_prompt": None,
-        "append_system_prompts": [],
-        "skills": [],
-        "extensions": [],
-        "prompt_templates": [],
-        "mcp_servers": [],
+        "description": "A complete test agent.",
+        "pi_profile": "vanilla",
+        "model_resources": ["local", "reviewer"],
+        "default_model_resource": "local",
     }
 
 
-def test_loads_and_fingerprints_selected_resources(tmp_path):
-    context = tmp_path / "AGENTS.md"
-    context.write_text("Write a test before changing code.\n", encoding="utf-8")
-    profile = base_profile()
-    profile["context_files"] = [{"name": "test-first", "path": "AGENTS.md"}]
-    config = tmp_path / "profiles.json"
-    write_profiles(config, profile)
-
-    loaded = load_agent_profiles(config)["test-agent"]
-    identity = loaded.public_identity()
-
-    assert loaded.tools == ("read", "bash", "edit")
-    assert identity["profile"] == "test-agent"
-    assert identity["configuration"]["resources"]["context_files"][0]["files"] == 1
-    assert str(tmp_path) not in json.dumps(identity)
-
-
-def test_resource_change_changes_profile_fingerprint(tmp_path):
-    context = tmp_path / "AGENTS.md"
-    context.write_text("First version.\n", encoding="utf-8")
-    profile = base_profile()
-    profile["context_files"] = [{"name": "rules", "path": "AGENTS.md"}]
-    config = tmp_path / "profiles.json"
-    write_profiles(config, profile)
-    first = load_agent_profiles(config)["test-agent"].public_identity()
-
-    context.write_text("Second version.\n", encoding="utf-8")
-    second = load_agent_profiles(config)["test-agent"].public_identity()
-
-    assert first["configuration_fingerprint"] != second["configuration_fingerprint"]
-
-
-def test_rejects_symbolic_link_resources(tmp_path):
-    real = tmp_path / "real.md"
-    real.write_text("Hidden behind a link.\n", encoding="utf-8")
-    linked = tmp_path / "linked.md"
-    linked.symlink_to(real)
-    profile = base_profile()
-    profile["context_files"] = [{"name": "linked", "path": "linked.md"}]
-    config = tmp_path / "profiles.json"
-    write_profiles(config, profile)
-
-    loaded = load_agent_profiles(config)["test-agent"]
-
-    assert loaded.readiness_errors() == ["linked: resource paths cannot be symbolic links"]
-
-
-def test_runtime_environment_records_names_but_not_secret_values(tmp_path):
-    profile = base_profile()
-    profile["runtime_env"] = {"MY_TOOL_TOKEN": "PRIVATE_AGENT_TOKEN"}
-    config = tmp_path / "profiles.json"
-    write_profiles(config, profile)
-    loaded = load_agent_profiles(config)["test-agent"]
-
-    assert loaded.resolved_runtime_env({"PRIVATE_AGENT_TOKEN": "do-not-record-this"}) == {
-        "MY_TOOL_TOKEN": "do-not-record-this"
-    }
-    assert "do-not-record-this" not in json.dumps(loaded.public_identity())
-    with pytest.raises(ValueError, match="PRIVATE_AGENT_TOKEN"):
-        loaded.resolved_runtime_env({})
-
-
-def test_runtime_environment_cannot_replace_the_isolated_pi_home(tmp_path):
-    profile = base_profile()
-    profile["runtime_env"] = {"HOME": "PRIVATE_HOME"}
-    config = tmp_path / "profiles.json"
-    write_profiles(config, profile)
-
-    with pytest.raises(ValueError, match="protected variable"):
-        load_agent_profiles(config)
-
-
-def test_rejects_mcp_server_without_its_extension(tmp_path):
-    profile = base_profile()
-    profile["mcp_servers"] = [
-        {
-            "name": "issues",
-            "extension": "mcp-client",
-            "transport": "http",
-            "server": "company-issues",
-            "tools": ["issue_search"],
-        }
-    ]
-    profile["tools"].append("issue_search")
-    config = tmp_path / "profiles.json"
-    write_profiles(config, profile)
-
-    loaded = load_agent_profiles(config)["test-agent"]
-
-    assert loaded.readiness_errors() == [
-        "test-agent: MCP server 'issues' names missing extension 'mcp-client'"
-    ]
-
-
-def test_rejects_mcp_tools_that_pi_cannot_use(tmp_path):
-    extension = tmp_path / "mcp-client.ts"
-    extension.write_text("export default function () {}\n", encoding="utf-8")
-    profile = base_profile()
-    profile["extensions"] = [{"name": "mcp-client", "path": "mcp-client.ts"}]
-    profile["mcp_servers"] = [
-        {
-            "name": "issues",
-            "extension": "mcp-client",
-            "transport": "http",
-            "server": "company-issues",
-            "tools": ["issue_search"],
-        }
-    ]
-    config = tmp_path / "profiles.json"
-    write_profiles(config, profile)
-
-    loaded = load_agent_profiles(config)["test-agent"]
-
-    assert loaded.readiness_errors() == [
-        "test-agent: MCP server 'issues' has tools that are not enabled for "
-        "this outcome: issue_search"
-    ]
-
-
-def test_rejects_model_choices_and_secrets_in_agent_settings(tmp_path):
-    config = tmp_path / "profiles.json"
-    profile = base_profile()
-    profile["settings"] = {"defaultModel": "gpt-example"}
-    write_profiles(config, profile)
-    with pytest.raises(ValueError, match="belongs in the model"):
-        load_agent_profiles(config)
-
-    profile["settings"] = {"toolToken": "never-put-secrets-here"}
-    write_profiles(config, profile)
-    with pytest.raises(ValueError, match="cannot contain secrets"):
-        load_agent_profiles(config)
-
-
-def test_allows_non_secret_token_budget_settings(tmp_path):
-    config = tmp_path / "profiles.json"
-    profile = base_profile()
-    profile["settings"] = {"compaction": {"reserveTokens": 12000}}
-    write_profiles(config, profile)
-
-    loaded = load_agent_profiles(config)["test-agent"]
-
-    assert loaded.settings["compaction"]["reserveTokens"] == 12000
-
-
-def test_owned_agent_profile_examples_are_complete_and_ready():
-    profiles = load_agent_profiles(
-        ROOT / "examples" / "agent-profiles" / "agent-profiles.example.json"
+def load(tmp_path, value=None, models=None):
+    return load_agent_profiles(
+        write_profile(tmp_path, value or base_value()),
+        pi_profiles={"vanilla": vanilla_pi_profile()},
+        model_profiles=models or {"local": model("local"), "reviewer": model("reviewer")},
     )
 
-    assert set(profiles) == {
-        "example-guidance",
-        "example-skill",
-        "example-extension",
-        "example-prompt-template",
-        "example-mcp",
-        "example-everything",
-    }
-    assert all(profile.readiness_errors() == [] for profile in profiles.values())
-    everything = profiles["example-everything"]
-    assert everything.tools[-2:] == (
-        "repository_info",
-        "example_catalog_lookup",
+
+def test_composed_profile_preserves_resource_order_and_fingerprints_bindings(tmp_path):
+    profile = load(tmp_path)["test-agent"]
+    identity = profile.public_identity()
+    assert [resource.name for resource in profile.model_resources] == ["local", "reviewer"]
+    assert profile.default_model.name == "local"
+    assert [item["profile"] for item in identity["model_resources"]] == [
+        "local",
+        "reviewer",
+    ]
+
+    changed = base_value()
+    changed["model_resources"] = ["reviewer", "local"]
+    reordered = load(tmp_path, changed)["test-agent"]
+    assert (
+        reordered.public_identity()["configuration_fingerprint"]
+        != identity["configuration_fingerprint"]
     )
-    assert everything.mcp_servers[0]["extension"] == "mcp-client"
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"pi_profile": "missing"}, "unknown Pi profile"),
+        ({"model_resources": ["missing"]}, "unknown model resource"),
+        ({"model_resources": []}, "non-empty list"),
+        ({"model_resources": ["local", "local"]}, "must be unique"),
+        ({"default_model_resource": "missing"}, "must appear"),
+    ],
+)
+def test_rejects_invalid_component_bindings(tmp_path, change, message):
+    value = base_value()
+    value.update(change)
+    with pytest.raises(ValueError, match=message):
+        load(tmp_path, value)
+
+
+def test_alias_and_default_changes_affect_composed_fingerprint(tmp_path):
+    first = load(tmp_path)["test-agent"].public_identity()["configuration_fingerprint"]
+    renamed_models = {"local": model("local"), "review": model("review")}
+    value = base_value()
+    value["model_resources"] = ["local", "review"]
+    value["default_model_resource"] = "review"
+    second = load(tmp_path, value, renamed_models)[
+        "test-agent"
+    ].public_identity()["configuration_fingerprint"]
+    assert first != second
+
+
+def test_rejects_duplicate_direct_pairs_and_conflicting_provider_auth(tmp_path):
+    duplicate = {
+        "one": model(
+            "one", mode="pi-direct", provider="openai-codex", direct_model="same"
+        ),
+        "two": model(
+            "two", mode="pi-direct", provider="openai-codex", direct_model="same"
+        ),
+    }
+    value = base_value()
+    value["model_resources"] = ["one", "two"]
+    value["default_model_resource"] = "one"
+    with pytest.raises(ValueError, match="duplicate direct provider/model pair"):
+        load(tmp_path, value, duplicate)
+
+    conflicting_value = duplicate["two"].public_identity()
+    assert conflicting_value
+    two_payload = {
+        "kind": "hosted",
+        "model": "openai/two",
+        "execution": {
+            "mode": "pi-direct",
+            "provider": "openai-codex",
+            "model": "two",
+            "auth_file_env": "OTHER_AUTH_FILE",
+        },
+        "capabilities": {
+            "context_tokens": 32768,
+            "max_output_tokens": 8192,
+            "reasoning": True,
+            "input": ["text"],
+        },
+        "configuration": {"model_revision": "two"},
+    }
+    conflicting = {
+        "one": duplicate["one"],
+        "two": ModelProfile.from_dict("two", two_payload),
+    }
+    with pytest.raises(ValueError, match="sharing provider.*conflict"):
+        load(tmp_path, value, conflicting)

@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pi Agent Bench — Model comparison</title>
+  <title>Pi Agent Bench — Agent profile comparison</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <main class="shell">
     <header>
       <div>
-        <div class="eyebrow">Comparable-cohort model evaluation</div>
+        <div class="eyebrow">Comparable-cohort agent-system evaluation</div>
         <h1>Pi Agent Bench</h1>
-        <p class="subtitle">The main benchmark view is quality against total task time: useful work, delivered sooner.</p>
+        <p class="subtitle">Compare complete runnable agent profiles by finished quality, total time, and reported inference cost.</p>
       </div>
       <div class="status" id="status">Loading metrics…</div>
     </header>
@@ -26,39 +26,94 @@
       <label>Dataset version
         <select id="dataset"></select>
       </label>
+      <label>Comparison cohort
+        <select id="cohort"></select>
+      </label>
       <label>Run name
         <select id="run_name"></select>
       </label>
       <label>Cache state
         <select id="cache"></select>
       </label>
-      <label>Trend metric
-        <select id="metric"></select>
-      </label>
-      <label>Comparison baseline
+      <label>Δ quality baseline
         <select id="baseline"></select>
       </label>
-      <label class="check-label">
+      <label class="check-label" title="Use only benchmark cases present for every agent profile">
         <input id="common-only" type="checkbox" checked>
-        Common cases only
+        <span>
+          Shared cases only
+          <small>Cases present for every profile</small>
+        </span>
       </label>
     </section>
 
     <section class="panel chart-panel primary-chart">
       <div class="chart-head">
-        <h2>Primary view: quality versus total task time</h2>
-        <span>Upper-left is better: higher quality, less time</span>
+        <h2>Quality, time, and cost by agent profile</h2>
       </div>
       <div class="canvas-wrap">
-        <canvas id="pareto" role="img" aria-label="Quality versus total task time by model and agent setup"></canvas>
+        <canvas id="pareto" role="img" aria-label="Quality versus total task time with cost bubble size by agent profile"></canvas>
         <div class="tooltip" id="pareto-tip"></div>
       </div>
       <div class="legend" id="pareto-legend"></div>
     </section>
 
+    <section class="panel metric-analysis">
+      <div class="analysis-head">
+        <div>
+          <h2>Metric analysis</h2>
+          <span>Compare the selected measure across profiles and over time.</span>
+        </div>
+        <label class="metric-control">Metric
+          <select id="metric"></select>
+        </label>
+      </div>
+      <div class="metric-grid">
+        <article class="analysis-chart">
+          <div class="chart-head">
+            <div>
+              <h3 id="comparison-title">Selected metric across profiles</h3>
+              <span>Mean with a 95% Wilson or case-bootstrap interval</span>
+            </div>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="comparison" role="img" aria-label="Selected metric comparison with uncertainty by model and agent setup"></canvas>
+            <div class="tooltip" id="comparison-tip"></div>
+          </div>
+        </article>
+        <article class="analysis-chart">
+          <div class="chart-head">
+            <div>
+              <h3>Change over time</h3>
+              <span>One benchmark case across recorded runs</span>
+            </div>
+            <label>Benchmark case
+              <select id="trend-case"></select>
+            </label>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="trend" role="img" aria-label="Selected metric over time for one benchmark case"></canvas>
+            <div class="tooltip" id="trend-tip"></div>
+          </div>
+          <div class="legend" id="trend-legend"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel chart-panel secondary-chart">
+      <div class="chart-head">
+        <h2>Success versus tokens</h2>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="token-success" role="img" aria-label="Success rate versus median tokens used by successful tasks"></canvas>
+        <div class="tooltip" id="token-success-tip"></div>
+      </div>
+      <div class="legend" id="token-success-legend"></div>
+    </section>
+
     <section class="panel section">
       <div class="section-head">
-        <h2>Model and agent comparison</h2>
+        <h2>Agent profile comparison</h2>
         <span id="cohort-label">One outcome dataset version at a time</span>
       </div>
       <div class="table-scroll">
@@ -66,10 +121,10 @@
           <thead>
             <tr>
               <th>Rank</th>
-              <th>Setup</th>
-              <th>Model</th>
-              <th>Type</th>
-              <th>Provider / runtime</th>
+              <th>Agent profile</th>
+              <th>Pi profile</th>
+              <th>Model resources</th>
+              <th>Default resource</th>
               <th>Coverage</th>
               <th>Trials / case</th>
               <th>Rank stability</th>
@@ -79,7 +134,8 @@
               <th>Median successful time</th>
               <th>Tokens / success</th>
               <th>Observed output tok/s</th>
-              <th>Reported cost / success</th>
+              <th>Summed run cost · coverage</th>
+              <th>Observed models</th>
               <th>Configuration</th>
             </tr>
           </thead>
@@ -88,55 +144,20 @@
       </div>
     </section>
 
-    <section class="grid">
-      <article class="panel chart-panel">
-        <div class="chart-head">
-          <h2 id="comparison-title">Selected metric</h2>
-          <span>Mean with a 95% Wilson or case-bootstrap interval</span>
-        </div>
-        <div class="canvas-wrap">
-          <canvas id="comparison" role="img" aria-label="Selected metric comparison with uncertainty by model and agent setup"></canvas>
-          <div class="tooltip" id="comparison-tip"></div>
-        </div>
-      </article>
-      <article class="panel chart-panel">
-        <div class="chart-head">
-          <h2>Success versus tokens</h2>
-          <span>Upper-left is better</span>
-        </div>
-        <div class="canvas-wrap">
-          <canvas id="token-success" role="img" aria-label="Success rate versus median tokens used by successful tasks"></canvas>
-          <div class="tooltip" id="token-success-tip"></div>
-        </div>
-        <div class="legend" id="token-success-legend"></div>
-      </article>
-    </section>
-
-    <section class="panel section">
+    <section class="panel section coverage-panel">
       <div class="section-head">
         <h2>Case coverage</h2>
-        <span id="coverage-label">Setup × case sample counts</span>
+        <span id="coverage-label">Assessing case and trial coverage.</span>
       </div>
-      <div class="table-scroll">
-        <table>
-          <thead><tr id="coverage-head"></tr></thead>
-          <tbody id="coverage-body"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="panel trend-panel">
-      <div class="chart-head">
-        <h2>Change over time</h2>
-        <label>Benchmark case
-          <select id="trend-case"></select>
-        </label>
-      </div>
-      <div class="canvas-wrap">
-        <canvas id="trend" role="img" aria-label="Selected metric over time for one benchmark case"></canvas>
-        <div class="tooltip" id="trend-tip"></div>
-      </div>
-      <div class="legend" id="trend-legend"></div>
+      <details id="coverage-details">
+        <summary>View case-by-profile matrix</summary>
+        <div class="table-scroll">
+          <table>
+            <thead><tr id="coverage-head"></tr></thead>
+            <tbody id="coverage-body"></tbody>
+          </table>
+        </div>
+      </details>
     </section>
 
     <section class="panel section">
@@ -147,7 +168,7 @@
       <div class="table-scroll">
         <table>
           <thead>
-            <tr><th>Time</th><th>Setup</th><th>Case</th><th>Trial</th><th>Metric</th><th>Value</th><th>Run</th><th>Benchmark fingerprint</th></tr>
+            <tr><th>Time</th><th>Agent profile</th><th>Case</th><th>Trial</th><th>Metric</th><th>Value</th><th>Campaign</th><th>Cohort fingerprint</th></tr>
           </thead>
           <tbody id="details"></tbody>
         </table>

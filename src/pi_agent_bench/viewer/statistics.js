@@ -2,6 +2,10 @@
       return `${row.run_id}::${row.case_id}::${row.trial_number}`;
     }
 
+    function campaignKey(row) {
+      return row.benchmark_id || row.run_name || row.run_id || "legacy-campaign";
+    }
+
     function successfulMetricValues(rows, metric) {
       const successfulSamples = new Set(
         rows
@@ -11,6 +15,18 @@
       return rows
         .filter(row => row.metric === metric && successfulSamples.has(sampleKey(row)))
         .map(row => row.value);
+    }
+
+    function selectComparisonRows(
+      rows,
+      { datasetVersion, cohortFingerprint, runName, cacheState }
+    ) {
+      return rows.filter(row =>
+        row.dataset_version === datasetVersion &&
+        row.cohort_fingerprint === cohortFingerprint &&
+        (!runName || runName === "__all_runs__" || row.run_name === runName) &&
+        row.cache_state === cacheState
+      );
     }
 
     function comparisonReadiness(cases, profiles, cohort, sameCoverage) {
@@ -29,17 +45,18 @@
         missing.push(`${3 - minimumTrials} more trial per setup/case`);
       }
       if (!sameCoverage) missing.push("identical case coverage");
-      if (distinct(cohort.map(row => row.benchmark_fingerprint)).length !== 1) {
-        missing.push("one benchmark fingerprint");
+      if (counts.length && !counts.every(count => count === counts[0])) {
+        missing.push("identical completed trial counts");
+      }
+      if (distinct(cohort.map(row => row.cohort_fingerprint)).length !== 1) {
+        missing.push("one generated cohort fingerprint");
       }
       if (distinct(cohort.map(row => row.scoring_method)).length !== 1) {
         missing.push("one scoring method");
       }
       [
-        ["framework_version", "one framework version"],
         ["inspect_version", "one Inspect version"],
-        ["pi_version", "one Pi version"],
-        ["sandbox_image_id", "one sandbox image"]
+        ["pi_version", "one Pi version"]
       ].forEach(([field, message]) => {
         if (distinct(cohort.map(row => row[field])).length !== 1) missing.push(message);
       });
@@ -109,7 +126,8 @@
         return { mean: 0, low: 0, high: 0, matches: 0, method: "baseline" };
       }
       const quality = rows.filter(row => row.metric === "quality.score");
-      const key = row => `${row.case_id}::${row.trial_number}`;
+      const key = row =>
+        `${campaignKey(row)}::${row.case_id}::${row.trial_number}`;
       const baselineValues = new Map(
         quality.filter(row => row.profile === baseline).map(row => [key(row), row.value])
       );
@@ -117,6 +135,7 @@
         .filter(row => row.profile === profile && baselineValues.has(key(row)))
         .map(row => ({
           case_id: row.case_id,
+          benchmark_id: campaignKey(row),
           value: row.value - baselineValues.get(key(row))
         }));
       if (!differences.length) return null;
@@ -132,12 +151,15 @@
 
     function repetitionRanks(rows, selectedProfile) {
       const quality = metricRows(rows, "quality.score");
-      const repetitions = unique(quality.map(row => row.trial_number));
+      const repetitions = unique(quality.map(row =>
+        `${campaignKey(row)}::${row.trial_number}`
+      ));
       return repetitions.map(repetition => {
         const ranked = unique(quality.map(row => row.profile)).map(profile => ({
           profile,
           quality: macroMean(quality.filter(row =>
-            row.profile === profile && row.trial_number === repetition
+            row.profile === profile &&
+            `${campaignKey(row)}::${row.trial_number}` === repetition
           ))
         })).sort((a, b) => (b.quality ?? -Infinity) - (a.quality ?? -Infinity));
         return ranked.findIndex(item => item.profile === selectedProfile) + 1;
@@ -203,7 +225,9 @@
       canvas.onmousemove = event => {
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left, y = event.clientY - rect.top;
-        const point = (state.points[canvasId] || []).find(item => Math.hypot(item.x - x, item.y - y) < 14);
+        const point = (state.points[canvasId] || []).find(
+          item => Math.hypot(item.x - x, item.y - y) < Math.max(14, (item.r || 0) + 5)
+        );
         if (!point) { tip.style.display = "none"; return; }
         tip.innerHTML = formatter(point);
         tip.style.display = "block";
@@ -264,6 +288,7 @@
         metricInterval,
         percentile,
         sampleKey,
+        selectComparisonRows,
         successfulMetricValues,
         wilsonInterval
       };

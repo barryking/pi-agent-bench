@@ -21,4 +21,6 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: scripts/check-all.sh
       - run: |
-          test "$(docker run --rm pi-agent-bench-sandbox:0.6.0 pi --version)" = "0.82.1"
+          sandbox_image="$(python -c 'from pi_agent_bench.versions import SANDBOX_IMAGE; print(SANDBOX_IMAGE)')"
+          pi_version="$(python -c 'from pi_agent_bench.versions import PI_VERSION; print(PI_VERSION)')"
+          test "$(docker run --rm "$sandbox_image" pi --version)" = "$pi_version"

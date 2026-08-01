@@ -1,229 +1,151 @@
 # What Pi Agent Bench measures
 
-A metric is one measured fact.
+The primary comparison unit is a complete agent profile.
 
-Do not use one metric to choose a model. A fast model is not useful if it
-cannot finish the task.
+## Primary chart
 
-The main benchmark view joins two facts:
+One bubble represents one profile in one valid generated cohort:
 
-```text
-quality versus total task time
-```
+- x: median total wall time across all valid runs;
+- y: macro mean quality, averaging trials within each case and then cases;
+- bubble area: summed reported inference cost across cohort runs; and
+- label: agent profile name.
 
-The dashboard shows this first. Upper-left is best: better work in less time.
-Quality and time stay separate so you can see both.
+The chart exposes the trade-off without declaring one region preferable. A
+point directly above another has better quality at about the same time. A
+similarly positioned smaller bubble achieves the same outcome at lower
+reported cost.
 
-## Result quality
+Partial cost uses a distinct dashed outline. Unavailable cloud cost uses a fixed
+hollow marker with no implied size.
 
-Pi Agent Bench records:
+## Quality and success
 
-- quality from `0` to `1`;
-- success as yes or no;
-- each verifier part;
-- success across repeated trials; and
-- how steady the result is.
+Quality ranges from `0` to `1` and comes from protected executable checks.
+Success requires quality at or above the case threshold and every required
+component to pass.
 
-The dashboard treats one model-and-agent pair as one comparison arm. For
-example, `model-a + team-agent` stays separate from `model-a` using vanilla Pi.
-
-Inspect also calculates:
-
-- the average;
-- the amount of uncertainty;
-- `pass@k`, which asks whether at least one of several tries works;
-- `pass^k`, which asks whether all of several tries work.
-
-Read `pass@k` and `pass^k` from the success field.
+Inspect also supplies repeated-trial reductions such as mean, `pass@k`, and
+`pass^k`. At least three trials per profile and case are required before small
+differences should be trusted.
 
 ## Time
 
-Pi Agent Bench records:
+Records include:
 
-- total trial time;
-- Pi process time;
+- total trial wall time;
+- Pi process wall time;
 - Inspect working time;
-- model working time from Inspect events;
-- tool working time from Inspect events;
-- time for successful tasks; and
-- middle and slow-end times across many trials.
+- bridged model working time;
+- tool working time; and
+- median and slow-end statistics across runs.
 
-Planned time measurements include:
+The primary chart uses every valid run, including unsuccessful attempts.
 
-- time until the first token;
-- verifier time; and
-- queue time.
+## Usage by execution path
 
-## Tokens
+Every result stores:
 
-A token is a small piece of text used by a model.
+```json
+{
+  "usage": {
+    "bridged": {
+      "call_count": 3,
+      "input_tokens": 12000,
+      "cached_input_tokens": 4000,
+      "output_tokens": 1800,
+      "reasoning_tokens": 700,
+      "model_seconds": 42.5,
+      "reported_cost": 0.08
+    },
+    "direct": {
+      "call_count": 1,
+      "input_tokens": 5000,
+      "cached_input_tokens": 0,
+      "output_tokens": 900,
+      "reasoning_tokens": 300,
+      "model_seconds": null,
+      "reported_cost": 0
+    },
+    "total": {
+      "call_count": 4,
+      "input_tokens": 17000,
+      "cached_input_tokens": 4000,
+      "output_tokens": 2700,
+      "reasoning_tokens": 1000,
+      "model_seconds": null,
+      "reported_cost": 0.08
+    },
+    "cost_coverage": "partial"
+  }
+}
+```
 
-Pi Agent Bench records these when the provider reports them:
+Inspect is authoritative for bridged calls. Only Pi assistant events attributed
+to configured direct provider/model pairs contribute direct usage. Pi bridge
+events are excluded from merged totals.
 
-- input tokens;
-- cached input tokens;
-- cache-write tokens;
-- reasoning tokens;
-- output tokens; and
-- total tokens.
+A merged token or timing field is non-null only when every used path supplies a
+compatible value. Zero is measured zero; unavailable is `null`.
 
-The dashboard includes success compared with tokens. This helps answer:
+## Cost coverage
 
-> How much model work was needed to get a correct result?
+Run cost is:
 
-## Local model speed
+```text
+local inference cost (0) + reported cloud inference costs
+```
 
-For vLLM, DGX, and other local servers, useful speed facts include:
+Coverage is deterministic:
 
-- output tokens each second;
-- prompt tokens each second;
-- time until the first token; and
-- queue time.
+- `complete`: local-only, or every used cloud call reports cost;
+- `partial`: at least one used cloud call reports cost and at least one does
+  not;
+- `unavailable`: cloud inference occurred but no used cloud call supplied cost.
 
-These are server facts. They help explain total task time.
-
-They are not proof of task quality.
-
-The dashboard now shows **observed output tokens per model second**. It divides
-Inspect's output-token count by Inspect's model working time.
-
-This is useful for a first comparison. It is not the same as vLLM engine
-throughput. It does not yet show first-token delay, queue time, or prompt
-speed. Those need facts from the local model server.
+Partial numeric cost is a lower bound. No currency field or provider breakdown
+is required. This is inference cost, not hardware amortisation, energy,
+maintenance, or operator cost.
 
 ## Agent behaviour
 
-Pi Agent Bench records:
+Pi events record turns, tool calls, failed tool calls, retries, compactions,
+return code, selected provider/model where available, and model changes where
+Pi emits them. Observed provider/model detail is explanatory and optional; a
+run can remain valid without it.
 
-- model turns;
-- tool calls;
-- failed tool calls;
-- retries;
-- context shortening, called compaction; and
-- process return codes.
+## Comparison validity
 
-These facts help explain why a model was slow or failed.
+Profiles share a chart only when they have:
 
-## Cost
+- the same generated cohort fingerprint;
+- identical case coverage;
+- identical completed trial counts;
+- matching verifier, limits, Pi, Inspect, execution-protocol, and sandbox
+  runtime evidence.
 
-Cloud providers may report a cost for each request.
+The composed profile fingerprint is not a grouping key: different profile
+identities are the arms being compared.
 
-Pi Agent Bench can show:
-
-- total reported cost;
-- cost for each successful task; and
-- how many trials include cost data.
-
-Missing cost stays empty. It is never changed to zero.
-
-Local cost needs extra facts, such as:
-
-- hardware price;
-- power use;
-- expected life;
-- maintenance time; and
-- how busy the hardware is.
+Several campaigns may contribute to one cohort. Matched quality deltas and
+repetition ranks use `benchmark_id + case_id + trial_number`, so repetitions
+from different campaigns cannot be paired accidentally.
 
 ## Evidence files
 
-```text
-logs/**/*.eval
-```
+- `logs/**/*.eval`: canonical Inspect evidence.
+- `results/*.json`: rebuildable per-trial records.
+- `results/*.diff`: final repository changes.
+- `results/runs.csv`: one wide row per trial.
+- `results/metrics.jsonl`: one chart metric per line.
+- `results/_invalid/`: incomplete, errored, or unscored attempts excluded from
+  rankings.
 
-These are the full Inspect records. They show the model messages, tool use, and
-scores.
-
-```text
-results/*.json
-```
-
-These are small records used for comparisons.
-
-They are copies, not the main evidence. Rebuild them with:
+Rebuild exports with:
 
 ```bash
 pi-bench export --logs-dir logs --results-dir results
 ```
 
-```text
-results/*.diff
-```
-
-These show code changes.
-
-```text
-results/runs.csv
-```
-
-This is one wide table row for each trial.
-
-```text
-results/metrics.jsonl
-```
-
-This is one metric fact on each line. It is easy for chart and database tools
-to read.
-
-Every line includes both `model_profile` and `agent_profile`. It also includes
-safe configuration hashes. This lets another chart tool compare the same model
-with different tools or instructions.
-
-## Dashboard charts
-
-The dashboard shows:
-
-- success by profile;
-- quality by profile;
-- time for successful tasks;
-- tokens for successful tasks;
-- success compared with tokens;
-- quality compared with time;
-- quality compared with cost;
-- case coverage;
-- changes from a chosen baseline;
-- Wilson intervals for success;
-- case-bootstrap intervals for other metrics;
-- rank ranges across recorded repetitions; and
-- history for one case.
-
-Each score measures one finished outcome.
-
-Different dataset versions are never mixed.
-
-Cold and warm cache runs should not be mixed.
-
-Quality changes match the same case and repetition number. They are not called
-paired experiments because each model run happened independently. With fewer
-than ten cases or five trials per setup and case, uncertainty is labelled
-exploratory.
-
-## Invalid attempts
-
-A trial enters a comparison only when:
-
-- Inspect says the log finished;
-- the sample has no run error; and
-- the quality score is a real number.
-
-Other attempts go under:
-
-```text
-results/_invalid/
-```
-
-They are useful for finding system problems. They do not count as model
-failures or ranking evidence.
-
-## Measurements still to add
-
-The most useful missing measurements are:
-
-- first-token time;
-- first useful action time;
-- prompt and output speed reported by local servers;
-- verifier time;
-- peak context use;
-- GPU memory and use;
-- power and energy;
-- local cost estimates; and
-- clear failure groups.
+Planned measurements remain first-token delay, local server queue/prompt speed,
+GPU/power/energy facts, and clearer failure groups.

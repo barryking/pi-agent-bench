@@ -8,400 +8,168 @@ from pi_agent_bench.reporting import (
 )
 
 
+def identity(profile):
+    return {
+        "profile": profile,
+        "description": profile,
+        "pi_profile": {
+            "profile": "vanilla",
+            "configuration": {"tools": ["read"]},
+            "configuration_fingerprint": "pi-one",
+        },
+        "model_resources": [
+            {
+                "profile": f"{profile}-model",
+                "kind": "hosted",
+                "model": f"openai/{profile}",
+                "execution": {"mode": "inspect-bridge"},
+                "configuration": {"revision": "one"},
+                "configuration_fingerprint": f"model-{profile}",
+            }
+        ],
+        "default_model_resource": f"{profile}-model",
+        "configuration_fingerprint": f"agent-{profile}",
+    }
+
+
 def write_record(
-    path,
-    *,
+    root,
     profile,
-    success,
-    score,
+    case,
+    trial,
+    quality,
     wall,
-    input_tokens,
-    output_tokens,
-    cost,
-    dataset_version="1",
-    agent_profile=None,
+    *,
+    cost=0.1,
+    cost_coverage="complete",
+    cohort="cohort-a",
 ):
     record = {
-        "schema_version": 4,
-        "run_id": f"run-{profile}",
-        "case_id": "case-1",
-        "dataset_version": dataset_version,
-        "started_at": "2026-07-25T12:00:00Z",
-        "trial_number": 1,
-        "run_name": "default",
-        "cache_state": "unspecified",
-        "model_configuration": {
-            "profile": profile,
-            "kind": "hosted" if profile != "dgx" else "local",
-            "configuration": {"temperature": 0},
-            "configuration_fingerprint": f"model-{profile}",
-        },
-        "agent_configuration": {
-            "profile": agent_profile or "vanilla",
-            "configuration": {"tools": ["read"]} if agent_profile else {},
-            "configuration_fingerprint": f"agent-{agent_profile or 'vanilla'}",
-        },
-        "inspect_model": f"openai/{profile}",
+        "schema_version": 5,
+        "run_id": f"{profile}-{case}-{trial}",
+        "case_id": case,
+        "dataset_version": "dataset-1",
+        "trial_number": trial,
+        "synthetic": False,
+        "run_name": "comparison",
+        "cache_state": "warm",
+        "agent_profile": identity(profile),
+        "inspect_model": "mockllm/model",
+        "cohort": {"cohort_fingerprint": cohort},
         "harness": {
-            "framework_version": "0.2.0",
-            "inspect_version": "0.3.249",
-            "pi_version_actual": "0.82.1",
-            "benchmark_fingerprint": "benchmark-a",
-            "sandbox_image_id": "sha256:test-image",
-            "sandbox_source_fingerprint": "sandbox-source-a",
+            "framework_version": "1",
+            "inspect_version": "1",
+            "pi_version_actual": "1",
+            "harness_source_fingerprint": "harness",
+            "sandbox_image_id": "image",
+            "sandbox_source_fingerprint": "sandbox",
         },
-        "success": success,
-        "score": {
-            "value": score,
-            "components": {"tests_pass": success},
-        },
+        "started_at": "2026-01-01T00:00:00Z",
         "wall_seconds": wall,
-        "timing": {
-            "inspect_working_seconds": wall - 0.5,
-            "model_working_seconds": 4.0,
-            "tool_working_seconds": 1.0,
-            "observed_output_tokens_per_model_second": 5.0,
+        "timing": {},
+        "validity": {"valid": True},
+        "success": quality >= 0.75,
+        "score": {
+            "value": quality,
+            "components": {},
+            "method": "deterministic",
+            "success_threshold": 0.75,
         },
         "usage": {
-            f"openai/{profile}": {
-                "input_tokens": input_tokens,
-                "input_tokens_cache_write": 3,
-                "input_tokens_cache_read": 2,
-                "reasoning_tokens": 4,
-                "output_tokens": output_tokens,
-                "total_cost": cost,
-            }
+            "bridged": {},
+            "direct": {},
+            "total": {
+                "input_tokens": 100,
+                "cached_input_tokens": 10,
+                "reasoning_tokens": 5,
+                "output_tokens": 20,
+                "model_seconds": 2,
+                "reported_cost": cost,
+            },
+            "cost_coverage": cost_coverage,
+            "observed_models": [
+                {
+                    "provider": "openai",
+                    "model": f"openai/{profile}",
+                    "execution": "inspect-bridge",
+                }
+            ],
         },
-        "agent": {
-            "wall_seconds": wall - 1,
-            "turns": 2,
-            "tool_calls": 3,
-            "failed_tool_calls": 0,
-            "retries": 1,
-            "compactions": 0,
-            "return_code": 0,
-        },
-        "verifier": {"return_code": 0},
-        "artifacts": {"inspect_log": "logs/example.eval"},
+        "agent": {"turns": 2},
+        "verifier": {},
+        "artifacts": {"inspect_log": "/tmp/example.eval"},
     }
+    path = root / f"{profile}-{case}-{trial}.json"
     path.write_text(json.dumps(record), encoding="utf-8")
+    return path
 
 
-def test_builds_profile_comparison_report(tmp_path):
-    write_record(
-        tmp_path / "dgx-1.json",
-        profile="dgx",
-        success=True,
-        score=1.0,
-        wall=20,
-        input_tokens=100,
-        output_tokens=20,
-        cost=None,
-    )
-    write_record(
-        tmp_path / "cloud-1.json",
-        profile="hosted-quality",
-        success=True,
-        score=1.0,
-        wall=5,
-        input_tokens=90,
-        output_tokens=15,
-        cost=0.25,
-    )
+def test_report_aggregates_by_agent_profile_with_required_chart_statistics(tmp_path):
+    for trial, quality, wall in [(1, 1.0, 10), (2, 0.0, 30)]:
+        write_record(tmp_path, "agent-a", "case-1", trial, quality, wall)
+    for trial, quality, wall in [(1, 0.5, 20), (2, 0.5, 40)]:
+        write_record(tmp_path, "agent-a", "case-2", trial, quality, wall)
 
     report = build_report(tmp_path)
-    markdown, summary_json = write_report(report, tmp_path / "summary.md")
+    summary = report["cohorts"]["cohort-a"]["profiles"]["agent-a"]
 
-    [cohort] = report["cohorts"].values()
-    assert report["schema_version"] == 6
-    assert cohort["profiles"]["dgx"]["trials"] == 1
-    assert cohort["profiles"]["dgx"]["success_rate"] == 1.0
-    assert cohort["profiles"]["dgx"]["provider_reported_total_cost"] is None
-    assert cohort["profiles"]["hosted-quality"]["provider_reported_total_cost"] == 0.25
-    assert "hosted-quality" in markdown.read_text(encoding="utf-8")
-    assert summary_json.exists()
+    assert summary["mean_quality_score"] == 0.5
+    assert summary["median_wall_seconds"] == 25
+    assert summary["provider_reported_total_cost"] == 0.4
+    assert summary["cost_coverage"] == "complete"
+    assert summary["configured_model_resources"][0]["name"] == "agent-a-model"
 
 
-def test_writes_visualizer_friendly_wide_and_long_exports(tmp_path):
+def test_profile_cost_coverage_combines_partial_and_unavailable(tmp_path):
+    write_record(tmp_path, "agent-a", "case-1", 1, 1, 10, cost=0.2)
     write_record(
-        tmp_path / "dgx-1.json",
-        profile="dgx",
-        success=True,
-        score=0.75,
-        wall=20,
-        input_tokens=100,
-        output_tokens=20,
-        cost=None,
+        tmp_path,
+        "agent-a",
+        "case-1",
+        2,
+        1,
+        10,
+        cost=0,
+        cost_coverage="unavailable",
     )
+    summary = build_report(tmp_path)["cohorts"]["cohort-a"]["profiles"]["agent-a"]
+    assert summary["provider_reported_total_cost"] == 0.2
+    assert summary["cost_coverage"] == "partial"
 
+
+def test_report_marks_profiles_with_different_case_coverage_non_comparable(tmp_path):
+    write_record(tmp_path, "agent-a", "case-1", 1, 1, 10)
+    write_record(tmp_path, "agent-b", "case-2", 1, 1, 10)
+    cohort = build_report(tmp_path)["cohorts"]["cohort-a"]
+    assert cohort["profiles_comparable"] is False
+    assert "different case or trial coverage" in cohort["comparison_warning"]
+
+
+def test_visualizer_exports_agent_and_cohort_dimensions(tmp_path):
+    write_record(tmp_path, "agent-a", "case-1", 1, 1, 10, cost_coverage="partial")
     runs_path, metrics_path = write_visualizer_exports(tmp_path)
+    [run] = list(csv.DictReader(runs_path.open()))
+    metrics = [json.loads(line) for line in metrics_path.read_text().splitlines()]
 
-    with runs_path.open(encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    metrics = [json.loads(line) for line in metrics_path.read_text(encoding="utf-8").splitlines()]
-
-    assert rows[0]["profile"] == "dgx"
-    assert rows[0]["record_schema_version"] == "4"
-    assert rows[0]["started_at"] == "2026-07-25T12:00:00Z"
-    assert rows[0]["pi_version"] == "0.82.1"
-    assert rows[0]["reasoning_tokens"] == "4"
-    assert rows[0]["model_working_seconds"] == "4.0"
-    assert rows[0]["observed_output_tokens_per_model_second"] == "5.0"
-    assert rows[0]["configuration_json"] == '{"temperature":0}'
+    assert run["agent_profile"] == "agent-a"
+    assert run["pi_profile"] == "vanilla"
+    assert run["model_resources"] == "agent-a-model"
+    assert run["cohort_fingerprint"] == "cohort-a"
+    assert run["cost_coverage"] == "partial"
     assert {row["metric"] for row in metrics} >= {
         "quality.score",
-        "quality.component.tests_pass",
         "time.wall",
-        "time.model_working",
-        "time.tool_working",
-        "speed.observed_output_tokens_per_model_second",
-        "tokens.cache_write",
-        "tokens.reasoning",
-        "tokens.total",
-        "agent.tool_calls",
+        "cost.provider_reported",
     }
-    assert {row["schema_version"] for row in metrics} == {4}
-    assert {row["started_at"] for row in metrics} == {"2026-07-25T12:00:00Z"}
+    assert all(row["cohort_fingerprint"] == "cohort-a" for row in metrics)
 
 
-def test_report_keeps_outcome_dataset_versions_separate(tmp_path):
-    write_record(
-        tmp_path / "outcome-a.json",
-        profile="dgx",
-        success=False,
-        score=0.0,
-        wall=30,
-        input_tokens=100,
-        output_tokens=20,
-        cost=None,
-        dataset_version="outcome-a-1",
-    )
-    write_record(
-        tmp_path / "outcome-b.json",
-        profile="dgx",
-        success=True,
-        score=1.0,
-        wall=20,
-        input_tokens=100,
-        output_tokens=20,
-        cost=None,
-        dataset_version="outcome-b-1",
-    )
-
+def test_markdown_names_complete_agent_profiles_and_cost_coverage(tmp_path):
+    write_record(tmp_path, "agent-a", "case-1", 1, 1, 10)
     report = build_report(tmp_path)
-
-    by_version = {cohort["dataset_version"]: cohort for cohort in report["cohorts"].values()}
-    assert by_version["outcome-a-1"]["profiles"]["dgx"]["mean_quality_score"] == 0
-    assert by_version["outcome-b-1"]["profiles"]["dgx"]["mean_quality_score"] == 1
-
-
-def test_report_compares_agent_setups_on_the_same_model(tmp_path):
-    write_record(
-        tmp_path / "vanilla.json",
-        profile="same-model",
-        agent_profile="vanilla",
-        success=True,
-        score=1.0,
-        wall=20,
-        input_tokens=100,
-        output_tokens=20,
-        cost=None,
-    )
-    write_record(
-        tmp_path / "guided.json",
-        profile="same-model",
-        agent_profile="team-tools",
-        success=True,
-        score=0.9,
-        wall=10,
-        input_tokens=80,
-        output_tokens=15,
-        cost=None,
-    )
-
-    report = build_report(tmp_path)
-
-    [cohort] = report["cohorts"].values()
-    assert set(cohort["profiles"]) == {
-        "same-model",
-        "same-model + team-tools",
-    }
-    assert cohort["profiles"]["same-model"]["agent_profile"] == "vanilla"
-    assert cohort["profiles"]["same-model + team-tools"]["agent_profile"] == "team-tools"
-
-
-def test_report_keeps_run_names_and_cache_states_separate(tmp_path):
-    first = tmp_path / "first.json"
-    second = tmp_path / "second.json"
-    write_record(
-        first,
-        profile="local",
-        success=True,
-        score=1.0,
-        wall=10,
-        input_tokens=10,
-        output_tokens=2,
-        cost=None,
-    )
-    write_record(
-        second,
-        profile="local",
-        success=False,
-        score=0.0,
-        wall=20,
-        input_tokens=20,
-        output_tokens=4,
-        cost=None,
-    )
-    first_record = json.loads(first.read_text(encoding="utf-8"))
-    first_record.update({"run_name": "cold-check", "cache_state": "cold"})
-    first.write_text(json.dumps(first_record), encoding="utf-8")
-    second_record = json.loads(second.read_text(encoding="utf-8"))
-    second_record.update({"run_name": "warm-check", "cache_state": "warm"})
-    second.write_text(json.dumps(second_record), encoding="utf-8")
-
-    report = build_report(tmp_path)
-
-    assert len(report["cohorts"]) == 2
-    assert {cohort["run_name"] for cohort in report["cohorts"].values()} == {
-        "cold-check",
-        "warm-check",
-    }
-
-
-def test_report_keeps_different_benchmark_builds_separate(tmp_path):
-    for name, fingerprint in (("first", "build-a"), ("second", "build-b")):
-        path = tmp_path / f"{name}.json"
-        write_record(
-            path,
-            profile="local",
-            success=True,
-            score=1.0,
-            wall=10,
-            input_tokens=10,
-            output_tokens=2,
-            cost=None,
-        )
-        record = json.loads(path.read_text(encoding="utf-8"))
-        record["run_name"] = "same-run"
-        record["harness"]["benchmark_fingerprint"] = fingerprint
-        path.write_text(json.dumps(record), encoding="utf-8")
-
-    report = build_report(tmp_path)
-
-    assert len(report["cohorts"]) == 2
-    assert {cohort["benchmark_fingerprint"] for cohort in report["cohorts"].values()} == {
-        "build-a",
-        "build-b",
-    }
-
-
-def test_missing_usage_is_not_exported_as_zero(tmp_path):
-    path = tmp_path / "run.json"
-    write_record(
-        path,
-        profile="dgx",
-        success=True,
-        score=1.0,
-        wall=20,
-        input_tokens=100,
-        output_tokens=20,
-        cost=None,
-    )
-    record = json.loads(path.read_text(encoding="utf-8"))
-    record["usage"]["openai/dgx"].pop("reasoning_tokens")
-    path.write_text(json.dumps(record), encoding="utf-8")
-
-    runs_path, metrics_path = write_visualizer_exports(tmp_path)
-    with runs_path.open(encoding="utf-8", newline="") as handle:
-        [run] = list(csv.DictReader(handle))
-    metrics = [json.loads(line) for line in metrics_path.read_text(encoding="utf-8").splitlines()]
-
-    assert run["reasoning_tokens"] == ""
-    assert "tokens.reasoning" not in {row["metric"] for row in metrics}
-
-
-def test_invalid_attempts_never_enter_reports_or_exports(tmp_path):
-    write_record(
-        tmp_path / "valid.json",
-        profile="dgx",
-        success=True,
-        score=1.0,
-        wall=20,
-        input_tokens=100,
-        output_tokens=20,
-        cost=None,
-    )
-    invalid = {
-        "schema_version": 1,
-        "run_id": "run-invalid",
-        "validity": {"valid": False, "reason": "cancelled"},
-    }
-    (tmp_path / "invalid.json").write_text(json.dumps(invalid), encoding="utf-8")
-
-    report = build_report(tmp_path)
-    runs_path, _ = write_visualizer_exports(tmp_path)
-
-    assert report["records"] == 1
-    with runs_path.open(encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    assert [row["run_id"] for row in rows] == ["run-dgx"]
-
-
-def test_current_run_record_fields_are_required(tmp_path):
-    path = tmp_path / "run.json"
-    write_record(
-        path,
-        profile="local",
-        success=True,
-        score=1.0,
-        wall=20,
-        input_tokens=100,
-        output_tokens=20,
-        cost=None,
-    )
-    record = json.loads(path.read_text(encoding="utf-8"))
-    del record["agent_configuration"]["configuration_fingerprint"]
-    path.write_text(json.dumps(record), encoding="utf-8")
-
-    try:
-        build_report(tmp_path)
-    except ValueError as exc:
-        assert "agent_configuration.configuration_fingerprint" in str(exc)
-    else:
-        raise AssertionError("incomplete current records must be rejected")
-
-
-def test_direct_pi_run_uses_profile_model_and_pi_tokens(tmp_path):
-    path = tmp_path / "direct.json"
-    write_record(
-        path,
-        profile="subscription",
-        success=True,
-        score=1.0,
-        wall=20,
-        input_tokens=100,
-        output_tokens=20,
-        cost=None,
-    )
-    record = json.loads(path.read_text(encoding="utf-8"))
-    record["model_configuration"]["model"] = "openai-codex/gpt-example"
-    record["model_configuration"]["execution"] = {"mode": "pi-direct"}
-    record["usage"] = {}
-    record["agent"].update(
-        {
-            "input_tokens": 321,
-            "cached_input_tokens": 123,
-            "output_tokens": 45,
-        }
-    )
-    path.write_text(json.dumps(record), encoding="utf-8")
-
-    runs_path, _ = write_visualizer_exports(tmp_path)
-    with runs_path.open(encoding="utf-8", newline="") as handle:
-        [run] = list(csv.DictReader(handle))
-
-    assert run["model"] == "openai-codex/gpt-example"
-    assert run["input_tokens"] == "321"
-    assert run["cached_input_tokens"] == "123"
-    assert run["output_tokens"] == "45"
+    markdown, summary = write_report(report, tmp_path / "summary.md")
+    text = markdown.read_text()
+    assert "Agent profile" in text
+    assert "agent-a" in text
+    assert "Coverage" in text
+    assert summary.is_file()

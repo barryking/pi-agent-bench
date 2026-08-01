@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Protected behavioural verifier for the real FastAPI idempotency case."""
+"""Protected behavioural verifier for the external FastAPI idempotency candidate."""
 
 from __future__ import annotations
 

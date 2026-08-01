@@ -1,88 +1,143 @@
-# Choosing models and context sizes
+# Configure model resources
 
-A profile is one exact model setup.
+A model profile is a reusable definition of one concrete inference resource.
+Its profile name becomes the agent-visible resource alias, so it must match:
 
-Two runs are not the same profile when they use different:
+```text
+[a-z0-9][a-z0-9._-]*
+```
 
-- model versions;
-- number compression;
-- server versions;
-- context sizes;
-- cache settings; or
-- generation settings.
+The name cannot contain `/`, whitespace, or provider syntax.
 
-Record these details in the profile JSON.
+## Inspect bridge
 
-Reasoning level is a model setting, not an agent setting. Record it as:
+Use `inspect-bridge` for local OpenAI-compatible servers, ordinary cloud APIs,
+and OpenRouter:
 
 ```json
 {
+  "kind": "local",
+  "model": "openai/nvidia/example-model",
+  "execution": {
+    "mode": "inspect-bridge",
+    "model_args": {},
+    "model_args_env": {
+      "base_url": "LOCAL_MODEL_BASE_URL",
+      "api_key": "LOCAL_MODEL_API_KEY"
+    },
+    "generate_config": {
+      "temperature": 0
+    }
+  },
+  "capabilities": {
+    "context_tokens": 131072,
+    "max_output_tokens": 32768,
+    "reasoning": true,
+    "input": ["text"]
+  },
   "configuration": {
-    "thinking_level": "high"
+    "weights": "example@exact-revision",
+    "runtime": "vllm",
+    "runtime_version": "exact-version",
+    "quantisation": "NVFP4"
   }
 }
 ```
 
-Allowed values are `none` or `off`, `minimal`, `low`, `medium`, `high`,
-`xhigh`, and `max`. The provider may support only some of them. Pi Agent Bench
-passes the value through Inspect for normal API runs and through Pi for direct
-subscription runs. It translates `none` and `off` when the two tools use
-different words for the same choice.
+`model_args` contains public-safe Inspect constructor arguments.
+`model_args_env` maps constructor arguments to host environment names. Each
+resource is constructed independently; Pi Agent Bench never mutates
+process-wide provider variables around an evaluation.
 
-## Start with roles, not favourite models
+`generate_config` contains Inspect generation defaults. Secret-like fields are
+invalid in public arguments, generation config, capabilities, and
+configuration.
 
-Prepare profiles for:
+### Common bridged providers
 
-- a local candidate;
-- a strong hosted control;
-- a cheaper hosted control; and
-- an optional subscription control.
+The `model` prefix selects Inspect's provider adapter. Common shapes are:
 
-Model names change over time. Check current provider and model documentation
-before filling the profile.
+| Server or provider | Model value | Environment-backed arguments |
+|---|---|---|
+| vLLM, SGLang, llama.cpp, or another OpenAI-compatible server | `openai/<exact-served-id>` | `base_url`, usually `api_key` |
+| Ollama | `ollama/<exact-model-tag>` | `base_url` when not using `http://localhost:11434/v1` |
+| OpenRouter | `openrouter/<provider>/<exact-model-slug>` | `api_key` |
+| OpenAI | `openai/<exact-model-id>` | `api_key` |
+| Anthropic | `anthropic/<exact-model-id>` | `api_key` |
+| Google | `google/<exact-model-id>` | `api_key` |
 
-## Context
+For a local endpoint, `pi-bench doctor` queries `/v1/models` and checks that
+the part after the Inspect provider prefix exactly matches an advertised ID.
+This catches a wrong Ollama tag or vLLM `--served-model-name` before a run.
+Non-Ollama local bridge resources must configure `base_url`; Ollama uses its
+native localhost default when one is omitted.
 
-Context is the text a model can hold during one request.
+Use exact model IDs and revisions for repeatable comparisons. Provider aliases
+that move over time are useful for applications but make benchmark identity
+less precise.
 
-Agent work also needs room for:
+## Pi direct
 
-- system instructions;
-- tool descriptions;
-- previous messages;
-- file contents;
-- tool results; and
-- the model's answer.
+Use `pi-direct` only where Inspect cannot construct the provider/authentication
+path. The first supported use is OpenAI Codex subscription OAuth:
 
-A model that says it supports 128K does not leave all 128K for source files.
+```json
+{
+  "kind": "hosted",
+  "model": "openai-codex/example-model",
+  "execution": {
+    "mode": "pi-direct",
+    "provider": "openai-codex",
+    "model": "example-model",
+    "auth_file_env": "PI_AUTH_FILE",
+    "thinking_level": "high"
+  },
+  "capabilities": {
+    "context_tokens": 131072,
+    "max_output_tokens": 32768,
+    "reasoning": true,
+    "input": ["text", "image"]
+  },
+  "configuration": {
+    "billing": "ChatGPT subscription",
+    "authentication": "Pi OAuth",
+    "model_revision": "exact-version-or-snapshot"
+  }
+}
+```
 
-Start with realistic smaller tasks. Test larger context bands later:
+The auth file path is resolved from the named host environment variable. The
+file content is never fingerprinted or copied to results.
 
-- 32K;
-- 64K;
-- 96K;
-- 128K;
-- larger stress tests when the server supports them.
+`thinking_level` is execution behaviour, so it belongs in `execution` and
+changes the model-resource fingerprint. Schema-1 local files that still place
+it in `configuration` remain readable for compatibility.
 
-Do not fill context with repeated nonsense. Use useful files and realistic
-distractions.
+## Capabilities and case limits
 
-## Check the exact setup
+Capabilities are required and generate Pi model metadata. Each case
+`context_tokens` limit caps the advertised resource window. `max_output_tokens`
+cannot exceed the real context window and is also capped to the effective case
+window.
 
-Before accepting results, record:
+## Reproducibility
 
-- provider;
-- model name;
-- model revision;
-- compression;
-- server name and version;
+Record measured facts such as:
+
+- exact model revision or weights;
+- runtime and version;
+- quantisation;
 - attention backend;
-- context limit;
-- KV-cache settings;
-- prefix caching;
-- temperature and seed, when supported;
-- reasoning level, when supported;
-- hardware; and
-- cost currency for billed providers.
+- configured context;
+- caching;
+- generation defaults;
+- provider snapshot; and
+- direct thinking level.
 
-If one of these changes, treat the result as a new setup.
+Clearly distinguish measured facts from estimates. A change to weights,
+runtime, context, generation settings, or execution path changes the model
+fingerprint and therefore the composed agent-profile fingerprint.
+
+Local resources have complete zero inference cost. Hosted cost comes only from
+runtime/provider telemetry; missing cloud cost is partial or unavailable, never
+zero.

@@ -1,15 +1,27 @@
-# Benchmark cases
+# Benchmark case files
 
-Each JSONL file contains complete outcome cases.
+Each JSONL file is a dataset containing one or more outcome cases.
 
 ```text
-sample/cases.jsonl                 two small smoke cases
-starter/cases.jsonl                five owned starter cases
-pilots/<name>/cases.jsonl          larger real-repository cases
-schemas/outcome-case.schema.json   case format
+sample/cases.jsonl                    two small framework smoke cases
+starter/cases.jsonl                   five maintained, ready-to-run cases
+candidates/<name>/cases.jsonl         draft or trial-stage maintainer cases
+schemas/outcome-case.schema.json      case format
 ```
 
-Every profile is judged by the same final outcome verifier.
+There is no separate pilot case type. A candidate becomes an ordinary
+maintained case only after it has been validated, proved with a known-good
+implementation, trialled with real agent profiles, and accepted into a
+versioned dataset.
+
+The starter suite is fully bundled: definitions, starting repositories,
+verifiers, and automated reference checks are all tracked. Normal users should
+start there.
+
+Candidate definitions and verifiers may be tracked while their external
+starting repositories and private reference implementations are not. Read the
+candidate's status before attempting to run it. Draft candidates are
+intentionally rejected by benchmark commands.
 
 Each case points to:
 
@@ -25,5 +37,5 @@ Run:
 pi-bench validate evals/starter/cases.jsonl
 ```
 
-Read [Scoring and making cases](../docs/scoring-and-extending.md) before adding
-a case.
+Read [Creating, proving, and publishing cases](../docs/scoring-and-extending.md)
+before adding a case.

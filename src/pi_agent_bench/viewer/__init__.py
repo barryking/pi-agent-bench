@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ..reporting import build_report, write_report, write_visualizer_exports
+from ..result_records import load_records
 
 
 class LocalDashboardServer(ThreadingHTTPServer):
@@ -27,8 +28,17 @@ def prepare_dashboard(results_dir: str | Path) -> Path:
     """Refresh all derived reports and return the dashboard HTML asset."""
     destination = Path(results_dir).resolve()
     destination.mkdir(parents=True, exist_ok=True)
-    write_report(build_report(destination), destination / "summary.md")
-    write_visualizer_exports(destination)
+    metrics_path = destination / "metrics.jsonl"
+    has_existing_metrics = metrics_path.is_file() and metrics_path.stat().st_size > 0
+    record_paths = [
+        path for path in destination.glob("*.json") if path.name != "summary.json"
+    ]
+    records = load_records(destination) if record_paths else []
+    if records:
+        write_report(build_report(destination), destination / "summary.md")
+        write_visualizer_exports(destination)
+    elif not has_existing_metrics:
+        raise ValueError(f"{destination}: no run record JSON files found")
     return Path(str(files(__package__).joinpath("index.html")))
 
 
