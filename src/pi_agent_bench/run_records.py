@@ -28,9 +28,12 @@ def export_inspect_logs(
     destination = Path(results_dir).expanduser().resolve()
     destination.mkdir(parents=True, exist_ok=True)
     previous_records = _managed_valid_records(destination)
+    previous_by_log = _records_by_inspect_log(previous_records)
+    preserved_records: set[Path] = set()
     written: list[Path] = []
     for info in list_eval_logs(str(Path(logs_dir).expanduser().resolve())):
         log = read_eval_log(info.name)
+        source_records = previous_by_log.get(str(log.location), set())
         metadata = getattr(log.eval, "metadata", None) or {}
         benchmark = metadata.get("pi_agent_bench")
         if not isinstance(benchmark, dict):
@@ -38,6 +41,7 @@ def export_inspect_logs(
                 f"skipped Inspect log without Pi Agent Bench metadata: {info.name}",
                 stacklevel=2,
             )
+            preserved_records.update(source_records)
             continue
         agent_profile = benchmark.get("agent_profile")
         cohort_identity = benchmark.get("cohort")
@@ -50,12 +54,14 @@ def export_inspect_logs(
                 f"skipped Inspect log without a run name: {info.name}",
                 stacklevel=2,
             )
+            preserved_records.update(source_records)
             continue
         if cache_state not in {"unspecified", "cold", "warm"}:
             warnings.warn(
                 f"skipped Inspect log with an invalid cache state: {info.name}",
                 stacklevel=2,
             )
+            preserved_records.update(source_records)
             continue
         try:
             written.extend(
@@ -72,8 +78,9 @@ def export_inspect_logs(
             )
         except ValueError as exc:
             warnings.warn(f"skipped {info.name}: {exc}", stacklevel=2)
+            preserved_records.update(source_records)
     current_records = {path.resolve() for path in written}
-    for stale in sorted(previous_records - current_records):
+    for stale in sorted(previous_records - current_records - preserved_records):
         _remove_record_and_artifacts(stale)
     return written
 
@@ -396,6 +403,21 @@ def _managed_valid_records(destination: Path) -> set[Path]:
         ):
             records.add(path.resolve())
     return records
+
+
+def _records_by_inspect_log(records: set[Path]) -> dict[str, set[Path]]:
+    """Index managed records by the canonical log that produced them."""
+    indexed: dict[str, set[Path]] = {}
+    for path in records:
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        artifacts = value.get("artifacts") if isinstance(value, dict) else None
+        location = artifacts.get("inspect_log") if isinstance(artifacts, dict) else None
+        if isinstance(location, str) and location:
+            indexed.setdefault(location, set()).add(path)
+    return indexed
 
 
 def _remove_record_and_artifacts(record_path: Path) -> None:

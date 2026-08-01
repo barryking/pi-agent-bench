@@ -82,7 +82,7 @@
       bindTooltip("pareto", "pareto-tip", point =>
         `<strong>${escapeHtml(point.item.profile)}</strong>` +
         `${formatMetric(point.item.quality, "ratio")} quality · ${formatMetric(point.item.wallAll, "seconds")} median wall time<br>` +
-        `${formatMetric(point.item.cost, point.item.costUnit)} summed run cost · ${escapeHtml(point.item.costCoverage)} coverage<br>` +
+        `${escapeHtml(formatMetric(point.item.cost, point.item.costUnit))} summed run cost · ${escapeHtml(point.item.costCoverage)} coverage<br>` +
         `Configured: ${escapeHtml(point.item.modelResources)}; default: ${escapeHtml(point.item.defaultResource)}<br>` +
         `Observed: ${escapeHtml(point.item.observedModels)}`
       );

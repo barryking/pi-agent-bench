@@ -152,5 +152,5 @@ def test_rejects_duplicate_direct_pairs_and_conflicting_provider_auth(tmp_path):
         "one": duplicate["one"],
         "two": ModelProfile.from_dict("two", two_payload),
     }
-    with pytest.raises(ValueError, match="sharing provider.*conflict"):
+    with pytest.raises(ValueError, match=r"sharing provider.*conflict"):
         load(tmp_path, value, conflicting)

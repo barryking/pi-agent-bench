@@ -237,7 +237,7 @@
             profileRows,
             "speed.observed_output_tokens_per_model_second"
           ).map(row => row.value)),
-          cost: costRows.reduce((total, row) => total + row.value, 0),
+          cost: sumOrNull(costRows.map(row => row.value)),
           costCoverage,
           costUnit: costRows[0]?.unit || "cost",
           delta,
@@ -329,7 +329,7 @@
           <td class="number">${formatMetric(summary.wall, "seconds")}</td>
           <td class="number">${formatMetric(summary.tokensPerSuccess, "tokens")}</td>
           <td class="number">${formatMetric(summary.observedTokensPerSecond, "tokens/second")}</td>
-          <td class="number">${formatMetric(summary.cost, summary.costUnit)} · ${escapeHtml(summary.costCoverage)}</td>
+          <td class="number">${escapeHtml(formatMetric(summary.cost, summary.costUnit))} · ${escapeHtml(summary.costCoverage)}</td>
           <td class="model">${escapeHtml(summary.observedModels)}</td>
           <td class="model">${escapeHtml(summary.configuration)}<small>agent ${escapeHtml((summary.agentConfigurationFingerprint || "unreported").slice(0, 12))}</small></td>
         </tr>`).join("") : `<tr><td colspan="17"><div class="empty">No comparable results in this cohort.</div></td></tr>`;

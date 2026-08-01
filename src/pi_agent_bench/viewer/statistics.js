@@ -55,6 +55,7 @@
         missing.push("one scoring method");
       }
       [
+        ["sandbox_image_id", "one sandbox image"],
         ["inspect_version", "one Inspect version"],
         ["pi_version", "one Pi version"]
       ].forEach(([field, message]) => {
@@ -247,6 +248,9 @@
     function mean(values) {
       return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
     }
+    function sumOrNull(values) {
+      return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+    }
     function median(values) {
       if (!values.length) return null;
       const sorted = [...values].sort((a, b) => a - b);
@@ -289,6 +293,7 @@
         percentile,
         sampleKey,
         selectComparisonRows,
+        sumOrNull,
         successfulMetricValues,
         wilsonInterval
       };

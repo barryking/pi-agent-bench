@@ -68,6 +68,16 @@ def usage_record(
     resources = agent_identity["model_resources"]
     bridged = _bridged_path_usage(sample, timing, resources)
     direct = _direct_path_usage(score_metadata, resources)
+    cloud_cost_states = [*bridged.cloud_cost_states, *direct.cloud_cost_states]
+    if not cloud_cost_states or all(cloud_cost_states):
+        coverage = "complete"
+    elif any(cloud_cost_states):
+        coverage = "partial"
+    else:
+        coverage = "unavailable"
+    reported_cost = _numeric(bridged.values.get("reported_cost")) + _numeric(
+        direct.values.get("reported_cost")
+    )
     total = {
         "call_count": bridged.call_count + direct.call_count,
         **{
@@ -80,16 +90,8 @@ def usage_record(
                 "model_seconds",
             )
         },
-        "reported_cost": float(bridged.values["reported_cost"])
-        + _numeric(direct.values.get("reported_cost")),
+        "reported_cost": reported_cost if coverage != "unavailable" else None,
     }
-    cloud_cost_states = [*bridged.cloud_cost_states, *direct.cloud_cost_states]
-    if not cloud_cost_states or all(cloud_cost_states):
-        coverage = "complete"
-    elif any(cloud_cost_states):
-        coverage = "partial"
-    else:
-        coverage = "unavailable"
     return {
         "bridged": bridged.values,
         "direct": direct.values,
@@ -146,6 +148,8 @@ def _bridged_path_usage(
         for resource in resources
     ):
         cloud_cost_states.append(False)
+    if cloud_cost_states and not any(cloud_cost_states):
+        values["reported_cost"] = None
     return _PathUsage(values, call_count, cloud_cost_states, observed_models)
 
 
@@ -217,6 +221,8 @@ def _direct_path_usage(
         ):
             values[field] = None
         cloud_cost_states.extend([False] * unattributed)
+    if cloud_cost_states and not any(cloud_cost_states):
+        values["reported_cost"] = None
     return _PathUsage(values, call_count, cloud_cost_states, observed_models)
 
 

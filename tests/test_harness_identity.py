@@ -10,6 +10,7 @@ from pi_agent_bench.harness_identity import (
     sandbox_identity,
     sandbox_runtime_fingerprint,
     sandbox_source_fingerprint,
+    validate_harness_identity,
 )
 from pi_agent_bench.versions import FRAMEWORK_VERSION, PI_VERSION, SANDBOX_IMAGE
 
@@ -39,6 +40,44 @@ def test_common_sandbox_runtime_does_not_change_for_an_unrelated_verifier(tmp_pa
     )
 
     assert sandbox_runtime_fingerprint(tmp_path) == before
+
+
+def test_harness_validation_does_not_backfill_missing_legacy_fingerprints():
+    incomplete = {
+        "framework_version": "1",
+        "pi_version_expected": "1",
+        "inspect_version": "1",
+        "repository_commit": "commit",
+        "repository_branch": "branch",
+        "repository_dirty": False,
+        "sandbox_image": "image",
+        "sandbox_image_id": "sha256:image",
+        "sandbox_repo_digests": [],
+        "sandbox_source_fingerprint": "sandbox",
+    }
+
+    with pytest.raises(ValueError, match="execution_protocol_fingerprint"):
+        validate_harness_identity(incomplete)
+
+
+def test_harness_validation_rejects_empty_current_fingerprints():
+    incomplete = {
+        "framework_version": "1",
+        "pi_version_expected": "1",
+        "inspect_version": "1",
+        "repository_commit": "commit",
+        "repository_branch": "branch",
+        "repository_dirty": False,
+        "execution_protocol_fingerprint": "",
+        "sandbox_runtime_fingerprint": "runtime",
+        "sandbox_image": "image",
+        "sandbox_image_id": "sha256:image",
+        "sandbox_repo_digests": [],
+        "sandbox_source_fingerprint": "sandbox",
+    }
+
+    with pytest.raises(ValueError, match="execution_protocol_fingerprint"):
+        validate_harness_identity(incomplete)
 
 
 def test_sandbox_identity_rejects_a_stale_image(tmp_path, monkeypatch):

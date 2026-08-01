@@ -285,8 +285,16 @@ def _validate_execution(name: str, value: dict[str, Any]) -> None:
             )
         for key in ("provider", "model"):
             item = value[key]
-            if not isinstance(item, str) or not item.strip():
+            if not isinstance(item, str) or not item.strip() or item != item.strip():
                 raise ValueError(f"{name}: execution.{key} must be a non-empty string")
+            if any(marker in item for marker in "*?["):
+                raise ValueError(
+                    f"{name}: execution.{key} cannot contain Pi model-pattern characters"
+                )
+        if value["provider"] == "inspect-bridge":
+            raise ValueError(
+                f"{name}: execution.provider inspect-bridge is reserved for bridged models"
+            )
         auth_file_env = value["auth_file_env"]
         if not isinstance(auth_file_env, str) or not ENVIRONMENT_NAME.fullmatch(auth_file_env):
             raise ValueError(

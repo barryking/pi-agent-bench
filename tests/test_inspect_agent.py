@@ -2,8 +2,14 @@ import asyncio
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from pi_agent_bench.agent_profiles import AgentProfile
-from pi_agent_bench.inspect_agent import _stage_direct_auth, _stage_pi_profile
+from pi_agent_bench.inspect_agent import (
+    _append_direct_final_message,
+    _stage_direct_auth,
+    _stage_pi_profile,
+)
 from pi_agent_bench.model_profiles import ModelProfile
 from pi_agent_bench.pi_profiles import load_pi_profiles, vanilla_pi_profile
 
@@ -19,6 +25,36 @@ class FakeSandbox:
     async def exec(self, command):
         self.commands.append(command)
         return SimpleNamespace(success=True, stderr="")
+
+
+def direct_profile():
+    direct = ModelProfile.from_dict(
+        "reviewer",
+        {
+            "kind": "hosted",
+            "model": "openai-codex/reviewer",
+            "execution": {
+                "mode": "pi-direct",
+                "provider": "openai-codex",
+                "model": "reviewer",
+                "auth_file_env": "PI_AUTH_FILE",
+            },
+            "capabilities": {
+                "context_tokens": 32768,
+                "max_output_tokens": 8192,
+                "reasoning": True,
+                "input": ["text"],
+            },
+            "configuration": {"revision": "test"},
+        },
+    )
+    return AgentProfile(
+        name="test-agent",
+        description="Test.",
+        pi_profile=vanilla_pi_profile(),
+        model_resources=(direct,),
+        default_model_resource="reviewer",
+    )
 
 
 def test_stages_renamed_pi_profile_resources(tmp_path, monkeypatch):
@@ -70,33 +106,7 @@ def test_stages_authentication_only_for_selected_direct_resource(tmp_path, monke
         ),
         encoding="utf-8",
     )
-    direct = ModelProfile.from_dict(
-        "reviewer",
-        {
-            "kind": "hosted",
-            "model": "openai-codex/reviewer",
-            "execution": {
-                "mode": "pi-direct",
-                "provider": "openai-codex",
-                "model": "reviewer",
-                "auth_file_env": "PI_AUTH_FILE",
-            },
-            "capabilities": {
-                "context_tokens": 32768,
-                "max_output_tokens": 8192,
-                "reasoning": True,
-                "input": ["text"],
-            },
-            "configuration": {"revision": "test"},
-        },
-    )
-    profile = AgentProfile(
-        name="test-agent",
-        description="Test.",
-        pi_profile=vanilla_pi_profile(),
-        model_resources=(direct,),
-        default_model_resource="reviewer",
-    )
+    profile = direct_profile()
     fake = FakeSandbox()
     monkeypatch.setattr("pi_agent_bench.inspect_agent.sandbox", lambda: fake)
 
@@ -111,3 +121,47 @@ def test_stages_authentication_only_for_selected_direct_resource(tmp_path, monke
     staged = json.loads(fake.files["/pi/auth.json"])
     assert staged == {"openai-codex": {"access": "selected-secret"}}
     assert fake.commands == [["chmod", "600", "/pi/auth.json"]]
+
+
+def test_rejects_non_object_direct_authentication_document(tmp_path, monkeypatch):
+    auth = tmp_path / "auth.json"
+    auth.write_text("[]", encoding="utf-8")
+    fake = FakeSandbox()
+    monkeypatch.setattr("pi_agent_bench.inspect_agent.sandbox", lambda: fake)
+
+    with pytest.raises(RuntimeError, match="could not load openai-codex credentials"):
+        asyncio.run(
+            _stage_direct_auth(
+                direct_profile(),
+                {"reviewer": str(auth)},
+                "/pi",
+            )
+        )
+
+
+def test_direct_final_message_never_reuses_text_from_an_earlier_event():
+    state = SimpleNamespace(messages=[])
+    events = (
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "provider": "openai-codex",
+                "model": "reviewer",
+                "content": [{"type": "text", "text": "earlier response"}],
+            },
+        },
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "provider": "openai-codex",
+                "model": "reviewer",
+                "content": [{"type": "toolCall", "name": "read"}],
+            },
+        },
+    )
+
+    _append_direct_final_message(state, events, direct_profile())
+
+    assert state.messages == []

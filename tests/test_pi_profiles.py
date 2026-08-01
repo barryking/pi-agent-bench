@@ -88,9 +88,27 @@ def test_runtime_environment_records_names_but_not_secret_values(tmp_path):
     assert loaded.resolved_runtime_env({"PRIVATE_AGENT_TOKEN": "do-not-record-this"}) == {
         "MY_TOOL_TOKEN": "do-not-record-this"
     }
+    identity = loaded.public_identity()
+    assert identity["configuration"]["runtime_environment"] == {
+        "MY_TOOL_TOKEN": "PRIVATE_AGENT_TOKEN"
+    }
     assert "do-not-record-this" not in json.dumps(loaded.public_identity())
     with pytest.raises(ValueError, match="PRIVATE_AGENT_TOKEN"):
         loaded.resolved_runtime_env({})
+
+
+def test_runtime_environment_source_binding_changes_profile_fingerprint(tmp_path):
+    profile = base_profile()
+    profile["runtime_env"] = {"MY_TOOL_TOKEN": "TEAM_A_TOKEN"}
+    config = tmp_path / "profiles.json"
+    write_profiles(config, profile)
+    first = load_pi_profiles(config)["test-agent"].public_identity()
+
+    profile["runtime_env"] = {"MY_TOOL_TOKEN": "TEAM_B_TOKEN"}
+    write_profiles(config, profile)
+    second = load_pi_profiles(config)["test-agent"].public_identity()
+
+    assert first["configuration_fingerprint"] != second["configuration_fingerprint"]
 
 
 def test_runtime_environment_cannot_replace_the_isolated_pi_home(tmp_path):

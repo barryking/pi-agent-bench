@@ -7,6 +7,7 @@ const {
   matchedQualityDelta,
   metricInterval,
   selectComparisonRows,
+  sumOrNull,
   successfulMetricValues,
   wilsonInterval
 } = require("../../src/pi_agent_bench/viewer/statistics.js");
@@ -67,6 +68,11 @@ test("successful metrics are matched to the exact case and repetition", () => {
   assert.deepEqual(successfulMetricValues(rows, "time.wall"), [10]);
 });
 
+test("missing cost rows stay unavailable instead of becoming zero", () => {
+  assert.equal(sumOrNull([]), null);
+  assert.equal(sumOrNull([0.02, 0.03]), 0.05);
+});
+
 test("dashboard selection never mixes cohort fingerprints and can pool run labels", () => {
   const rows = [
     { dataset_version: "v1", cohort_fingerprint: "one", run_name: "first", cache_state: "warm" },
@@ -117,5 +123,14 @@ test("ranking requires identical coverage and complete version evidence", () => 
   const missingPi = cohort.map(row => ({ ...row, pi_version: null }));
   assert.ok(
     comparisonReadiness(cases, profiles, missingPi, true).missing.includes("one Pi version")
+  );
+  const mixedSandbox = cohort.map((row, index) => ({
+    ...row,
+    sandbox_image_id: index === 0 ? "sha256:other" : row.sandbox_image_id
+  }));
+  assert.ok(
+    comparisonReadiness(cases, profiles, mixedSandbox, true).missing.includes(
+      "one sandbox image"
+    )
   );
 });

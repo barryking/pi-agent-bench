@@ -65,7 +65,7 @@ Every result stores:
       "output_tokens": 900,
       "reasoning_tokens": 300,
       "model_seconds": null,
-      "reported_cost": 0
+      "reported_cost": null
     },
     "total": {
       "call_count": 4,

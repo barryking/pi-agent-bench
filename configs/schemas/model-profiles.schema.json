@@ -30,7 +30,9 @@
           ]
         },
         "capabilities": {"$ref": "#/$defs/capabilities"},
-        "configuration": {"type": "object"}
+        "configuration": {
+          "allOf": [{"type": "object"}, {"$ref": "#/$defs/publicJson"}]
+        }
       }
     },
     "bridgeExecution": {
@@ -39,7 +41,9 @@
       "required": ["mode", "model_args", "model_args_env", "generate_config"],
       "properties": {
         "mode": {"const": "inspect-bridge"},
-        "model_args": {"type": "object"},
+        "model_args": {
+          "allOf": [{"type": "object"}, {"$ref": "#/$defs/publicJson"}]
+        },
         "model_args_env": {
           "type": "object",
           "additionalProperties": {
@@ -47,7 +51,9 @@
             "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
           }
         },
-        "generate_config": {"type": "object"},
+        "generate_config": {
+          "allOf": [{"type": "object"}, {"$ref": "#/$defs/publicJson"}]
+        },
         "thinking_level": {"type": "string", "minLength": 1}
       }
     },
@@ -57,8 +63,13 @@
       "required": ["mode", "provider", "model", "auth_file_env"],
       "properties": {
         "mode": {"const": "pi-direct"},
-        "provider": {"type": "string", "minLength": 1},
-        "model": {"type": "string", "minLength": 1},
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\s*?\\[]+$",
+          "not": {"const": "inspect-bridge"}
+        },
+        "model": {"type": "string", "minLength": 1, "pattern": "^[^\\s*?\\[]+$"},
         "auth_file_env": {
           "type": "string",
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
@@ -81,6 +92,21 @@
           "items": {"enum": ["text", "image"]}
         }
       }
+    },
+    "publicJson": {
+      "anyOf": [
+        {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "pattern": "([aA][pP][iI][_-]?[kK][eE][yY]|[pP][aA][sS][sS][wW][oO][rR][dD]|[sS][eE][cC][rR][eE][tT]|[cC][rR][eE][dD][eE][nN][tT][iI][aA][lL]|[tT][oO][kK][eE][nN]$)"
+            }
+          },
+          "additionalProperties": {"$ref": "#/$defs/publicJson"}
+        },
+        {"type": "array", "items": {"$ref": "#/$defs/publicJson"}},
+        {"type": ["string", "number", "boolean", "null"]}
+      ]
     }
   }
 }

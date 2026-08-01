@@ -134,8 +134,9 @@ def pi_agent(
             config_dir,
         )
         guard_source = Path(__file__).with_name("pi_guard.py")
+        guard_path = f"{config_dir}/pi-guard.py"
         await sandbox().write_file(
-            "/tmp/pi-bench-pi-guard.py",
+            guard_path,
             guard_source.read_text(encoding="utf-8"),
         )
 
@@ -170,7 +171,7 @@ def pi_agent(
             telemetry.command = list(command)
             guarded_command = [
                 "python3",
-                "/tmp/pi-bench-pi-guard.py",
+                guard_path,
                 "--max-turns",
                 str(limits.turns),
                 "--max-tokens",
@@ -237,8 +238,10 @@ async def _stage_direct_auth(
         auth_source = Path(auth_files[resource.name])
         try:
             payload = json.loads(auth_source.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise TypeError("authentication document must be an object")
             provider_auth = payload[provider]
-        except (OSError, json.JSONDecodeError, KeyError) as exc:
+        except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
             raise RuntimeError(
                 f"could not load {provider} credentials for resource {resource.name}"
             ) from exc
@@ -275,7 +278,7 @@ def _append_direct_final_message(
         model = message.get("model")
         if (provider, model) not in direct_models:
             return
-        text = _final_assistant_text(events)
+        text = _assistant_text(message)
         if text:
             state.messages.append(
                 ChatMessageAssistant(content=text, model=f"{provider}/{model}")
@@ -442,14 +445,18 @@ def _final_assistant_text(events: tuple[dict[str, Any], ...]) -> str:
         message = event.get("message")
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        text = "".join(
-            block.get("text", "")
-            for block in content
-            if isinstance(block, dict) and block.get("type") == "text"
-        ).strip()
+        text = _assistant_text(message)
         if text:
             return text
     return ""
+
+
+def _assistant_text(message: dict[str, Any]) -> str:
+    content = message.get("content")
+    if not isinstance(content, list):
+        return ""
+    return "".join(
+        block.get("text", "")
+        for block in content
+        if isinstance(block, dict) and block.get("type") == "text"
+    ).strip()

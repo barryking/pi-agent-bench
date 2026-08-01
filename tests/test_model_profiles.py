@@ -142,6 +142,23 @@ def test_unknown_old_execution_fields_are_rejected():
         ModelProfile.from_dict("resource", value)
 
 
+def test_direct_provider_cannot_reuse_the_inspect_bridge_identity():
+    value = direct_value()
+    value["execution"]["provider"] = "inspect-bridge"
+
+    with pytest.raises(ValueError, match="reserved for bridged models"):
+        ModelProfile.from_dict("resource", value)
+
+
+@pytest.mark.parametrize(("field", "value"), [("provider", "open*ai"), ("model", "gpt?[5]")])
+def test_direct_identifiers_cannot_be_pi_model_patterns(field, value):
+    profile = direct_value()
+    profile["execution"][field] = value
+
+    with pytest.raises(ValueError, match="model-pattern characters"):
+        ModelProfile.from_dict("resource", profile)
+
+
 def test_case_context_caps_each_catalog_capability():
     profile = ModelProfile.from_dict("resource", bridged_value())
     assert profile.capped_capabilities(65536) == {

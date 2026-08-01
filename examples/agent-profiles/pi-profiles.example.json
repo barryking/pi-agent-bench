@@ -87,10 +87,6 @@
         {
           "name": "mcp-client",
           "path": "extensions/mcp-client"
-        },
-        {
-          "name": "model-switch",
-          "path": "extensions/model-switch.ts"
         }
       ],
       "prompt_templates": [],

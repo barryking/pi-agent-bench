@@ -126,7 +126,7 @@ class PiProfile:
     def public_identity(self) -> dict[str, Any]:
         configuration = {
             "tools": list(self.tools),
-            "runtime_environment": sorted(self.runtime_env),
+            "runtime_environment": dict(sorted(self.runtime_env.items())),
             "settings": self.settings,
             "resources": {
                 kind: [resource.public_identity() for resource in getattr(self, kind)]

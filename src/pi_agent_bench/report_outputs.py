@@ -153,10 +153,7 @@ def _flat_run(record: dict[str, Any]) -> dict[str, Any]:
             "execution_protocol_fingerprint",
             harness.get("harness_source_fingerprint"),
         ),
-        "harness_source_fingerprint": harness.get(
-            "execution_protocol_fingerprint",
-            harness.get("harness_source_fingerprint"),
-        ),
+        "harness_source_fingerprint": harness.get("harness_source_fingerprint"),
         "repository_commit": harness.get("repository_commit"),
         "repository_branch": harness.get("repository_branch"),
         "repository_dirty": harness.get("repository_dirty"),

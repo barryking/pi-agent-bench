@@ -1,3 +1,4 @@
+import csv
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,6 +8,7 @@ import pytest
 from pi_agent_bench.agent_profiles import AgentProfile
 from pi_agent_bench.model_profiles import ModelProfile
 from pi_agent_bench.pi_profiles import vanilla_pi_profile
+from pi_agent_bench.reporting import write_visualizer_exports
 from pi_agent_bench.result_records import validate_record
 from pi_agent_bench.run_records import export_inspect_logs, write_run_records
 from pi_agent_bench.versions import (
@@ -139,7 +141,7 @@ def log(*, model_usage=None, status="success", sample_error=None, score_value=No
     return SimpleNamespace(
         status=status,
         error=None,
-        location="/tmp/test.eval",
+        location="test-fixtures/test.eval",
         eval=SimpleNamespace(run_id="run-1", task_version="test-1", model="mockllm/model"),
         samples=[sample],
     )
@@ -195,6 +197,10 @@ def test_current_record_schema_requires_campaign_and_cohort_v2(tmp_path):
     assert record["schema_version"] == 6
     assert record["benchmark_id"] == "campaign-1"
     validate_record(record, path)
+    runs_path, _metrics_path = write_visualizer_exports(tmp_path)
+    [run] = list(csv.DictReader(runs_path.open()))
+    assert run["execution_protocol_fingerprint"] == "test-execution"
+    assert run["harness_source_fingerprint"] == "test-harness"
 
 
 def test_log_export_prunes_valid_records_absent_from_canonical_logs(
@@ -215,6 +221,32 @@ def test_log_export_prunes_valid_records_absent_from_canonical_logs(
     assert not stale.exists()
 
 
+def test_log_export_preserves_previous_record_when_source_log_is_skipped(
+    tmp_path,
+    monkeypatch,
+):
+    source = log()
+    [record] = write_run_records(
+        [source],
+        tmp_path,
+        agent_profile(),
+        run_name="previous",
+        harness_identity=HARNESS_IDENTITY,
+        cohort_identity=COHORT_IDENTITY,
+    )
+    source.eval.metadata = {}
+    monkeypatch.setattr(
+        "inspect_ai.log.list_eval_logs",
+        lambda _path: [SimpleNamespace(name=source.location)],
+    )
+    monkeypatch.setattr("inspect_ai.log.read_eval_log", lambda _name: source)
+
+    with pytest.warns(UserWarning, match="without Pi Agent Bench metadata"):
+        assert export_inspect_logs(tmp_path / "logs", tmp_path) == []
+
+    assert record.exists()
+
+
 def test_hosted_missing_cost_is_unavailable_not_zero(tmp_path):
     paths = write_run_records(
         [log(model_usage={"openai/resource": {
@@ -231,8 +263,54 @@ def test_hosted_missing_cost_is_unavailable_not_zero(tmp_path):
         cohort_identity=COHORT_IDENTITY,
     )
     usage = json.loads(paths[0].read_text(encoding="utf-8"))["usage"]
-    assert usage["total"]["reported_cost"] == 0
+    assert usage["bridged"]["reported_cost"] is None
+    assert usage["total"]["reported_cost"] is None
     assert usage["cost_coverage"] == "unavailable"
+
+
+def test_partial_cost_keeps_only_the_reported_lower_bound(tmp_path):
+    metadata = {
+        "pi_direct_usage": {
+            "call_count": 1,
+            "input_tokens": 20,
+            "cached_input_tokens": 2,
+            "output_tokens": 4,
+            "reasoning_tokens": 1,
+            "model_seconds": 0.5,
+            "reported_cost": 0,
+        },
+        "pi_direct_cost_reported_calls": 0,
+        "pi_observed_models": [
+            {"provider": "openai-codex", "model": "review", "call_count": 1}
+        ],
+        "pi_unattributed_assistant_calls": 0,
+    }
+    [path] = write_run_records(
+        [
+            log(
+                model_usage={
+                    "openai/resource": {
+                        "input_tokens": 10,
+                        "input_tokens_cache_read": 1,
+                        "output_tokens": 3,
+                        "reasoning_tokens": 0,
+                        "total_cost": 0.02,
+                    }
+                },
+                score_value=score(metadata=metadata),
+            )
+        ],
+        tmp_path,
+        hybrid_agent_profile(),
+        run_name="test",
+        harness_identity=HARNESS_IDENTITY,
+        cohort_identity=COHORT_IDENTITY,
+    )
+
+    usage = json.loads(path.read_text(encoding="utf-8"))["usage"]
+    assert usage["direct"]["reported_cost"] is None
+    assert usage["total"]["reported_cost"] == pytest.approx(0.02)
+    assert usage["cost_coverage"] == "partial"
 
 
 def test_hybrid_usage_merges_sources_without_counting_bridge_pi_events(tmp_path):

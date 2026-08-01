@@ -191,14 +191,12 @@ def validate_harness_identity(value: Any) -> dict[str, Any]:
     normalized = dict(value)
     # Schema-5 logs used one broad source hash. Preserve their rebuildability
     # while new logs record the two narrower identities explicitly.
-    normalized.setdefault(
-        "execution_protocol_fingerprint",
-        normalized.get("harness_source_fingerprint"),
-    )
-    normalized.setdefault(
-        "sandbox_runtime_fingerprint",
-        normalized.get("sandbox_source_fingerprint"),
-    )
+    for current, legacy in (
+        ("execution_protocol_fingerprint", "harness_source_fingerprint"),
+        ("sandbox_runtime_fingerprint", "sandbox_source_fingerprint"),
+    ):
+        if normalized.get(current) is None and normalized.get(legacy):
+            normalized[current] = normalized[legacy]
     required = {
         "framework_version",
         "pi_version_expected",
@@ -216,6 +214,19 @@ def validate_harness_identity(value: Any) -> dict[str, Any]:
     if not required.issubset(normalized):
         missing = sorted(required - set(normalized))
         raise ValueError(f"Inspect log has incomplete harness identity: {', '.join(missing)}")
+    empty_fingerprints = sorted(
+        field
+        for field in (
+            "execution_protocol_fingerprint",
+            "sandbox_runtime_fingerprint",
+        )
+        if not isinstance(normalized.get(field), str) or not normalized[field]
+    )
+    if empty_fingerprints:
+        raise ValueError(
+            "Inspect log has incomplete harness identity: "
+            + ", ".join(empty_fingerprints)
+        )
     return normalized
 
 
