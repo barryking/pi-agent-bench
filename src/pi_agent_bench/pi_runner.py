@@ -247,16 +247,11 @@ def summarise_direct_usage(
         message = event.get("message")
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
-        response_id = message.get("responseId")
-        timestamp = message.get("timestamp")
-        key = (
-            f"response:{response_id}"
-            if isinstance(response_id, str) and response_id
-            else f"timestamp:{timestamp}"
-        )
-        if key in seen:
-            continue
-        seen.add(key)
+        key = _completion_key(message)
+        if key is not None:
+            if key in seen:
+                continue
+            seen.add(key)
         provider = message.get("provider")
         model = message.get("model")
         if (provider, model) in direct_models:
@@ -332,6 +327,20 @@ def summarise_direct_usage(
         observed_models=tuple(observed.values()),
         unattributed_assistant_calls=unattributed,
     )
+
+
+def _completion_key(message: dict[str, Any]) -> str | None:
+    response_id = message.get("responseId")
+    if isinstance(response_id, str) and response_id:
+        return f"response:{response_id}"
+    timestamp = message.get("timestamp")
+    if (
+        isinstance(timestamp, (str, int, float))
+        and not isinstance(timestamp, bool)
+        and timestamp != ""
+    ):
+        return f"timestamp:{timestamp}"
+    return None
 
 
 def _usage_int(usage: dict[str, Any], *keys: str) -> int:

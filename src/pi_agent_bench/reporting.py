@@ -123,8 +123,9 @@ def _profile_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         for item in usage_values
         if isinstance(item["total_cost"], (int, float))
     ]
-    total_cost = sum(costs)
     coverage_states = [str(item["cost_coverage"]) for item in usage_values]
+    cost_coverage = _combined_cost_coverage(coverage_states)
+    total_cost = sum(costs) if costs and cost_coverage != "unavailable" else None
     identity = agent_configuration(records[0])
     configured_resources = [
         {
@@ -174,10 +175,12 @@ def _profile_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
             else None
         ),
         "provider_reported_total_cost": total_cost,
-        "cost_coverage": _combined_cost_coverage(coverage_states),
+        "cost_coverage": cost_coverage,
         "cost_coverage_runs": dict(sorted(Counter(coverage_states).items())),
         "provider_reported_cost_per_success": (
-            total_cost / len(successes) if successes else None
+            total_cost / len(successes)
+            if total_cost is not None and successes
+            else None
         ),
         "failed_cases": failed_cases,
     }

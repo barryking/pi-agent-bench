@@ -214,6 +214,27 @@ def test_direct_usage_excludes_bridge_events_and_keeps_cost_coverage_evidence():
     assert usage.cost_reported_calls == 1
 
 
+def test_direct_usage_keeps_distinct_events_without_deduplication_keys():
+    events = tuple(
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "provider": "openai-codex",
+                "model": "review",
+                "usage": {"input": 10, "output": 2},
+            },
+        }
+        for _ in range(2)
+    )
+
+    usage = summarise_direct_usage(events, {("openai-codex", "review")})
+
+    assert usage.aggregate["call_count"] == 2
+    assert usage.aggregate["input_tokens"] == 20
+    assert usage.aggregate["output_tokens"] == 4
+
+
 def test_rejects_observed_models_outside_the_composed_profile():
     events = (
         {

@@ -137,6 +137,25 @@ def test_profile_cost_coverage_combines_partial_and_unavailable(tmp_path):
     assert summary["cost_coverage"] == "partial"
 
 
+def test_profile_does_not_present_unavailable_cost_as_zero(tmp_path):
+    write_record(
+        tmp_path,
+        "agent-a",
+        "case-1",
+        1,
+        1,
+        10,
+        cost=0,
+        cost_coverage="unavailable",
+    )
+
+    summary = build_report(tmp_path)["cohorts"]["cohort-a"]["profiles"]["agent-a"]
+
+    assert summary["provider_reported_total_cost"] is None
+    assert summary["provider_reported_cost_per_success"] is None
+    assert summary["cost_coverage"] == "unavailable"
+
+
 def test_report_marks_profiles_with_different_case_coverage_non_comparable(tmp_path):
     write_record(tmp_path, "agent-a", "case-1", 1, 1, 10)
     write_record(tmp_path, "agent-b", "case-2", 1, 1, 10)
