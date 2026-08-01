@@ -13,6 +13,7 @@ def test_init_creates_local_files_without_overwriting(tmp_path):
     env = tmp_path / ".env.local"
     profiles = tmp_path / "configs" / "model-baselines.local.json"
     agent_profiles = tmp_path / "configs" / "agent-profiles.local.json"
+    pi_profiles = tmp_path / "configs" / "pi-profiles.local.json"
 
     assert {status for _, status in first} == {"created"}
     env.write_text("USER_VALUE=kept\n", encoding="utf-8")
@@ -23,6 +24,7 @@ def test_init_creates_local_files_without_overwriting(tmp_path):
     assert env.read_text(encoding="utf-8") == "USER_VALUE=kept\n"
     assert profiles.is_file()
     assert agent_profiles.is_file()
+    assert pi_profiles.is_file()
 
 
 def test_new_case_creates_loadable_safe_scaffold(tmp_path):

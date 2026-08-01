@@ -16,14 +16,12 @@ def test_cli_exposes_final_command_name():
     assert build_parser().prog == "pi-bench"
 
 
-def test_benchmark_can_compare_agent_profiles_with_the_same_model():
+def test_benchmark_compares_complete_agent_profiles():
     args = build_parser().parse_args(
         [
             "benchmark",
-            "--model-profile",
-            "local-model",
             "--agent-profile",
-            "vanilla",
+            "local-agent",
             "--agent-profile",
             "team-tools",
             "--run-name",
@@ -31,34 +29,44 @@ def test_benchmark_can_compare_agent_profiles_with_the_same_model():
         ]
     )
 
-    assert args.model_profile == ["local-model"]
-    assert args.agent_profile == ["vanilla", "team-tools"]
+    assert args.agent_profile == ["local-agent", "team-tools"]
 
 
-def test_doctor_uses_explicit_model_and_agent_profile_names():
+def test_doctor_uses_profile_first_component_files():
     args = build_parser().parse_args(
         [
             "doctor",
-            "--model-profile",
-            "hosted-quality",
             "--model-profiles-file",
             "models.json",
             "--agent-profile",
             "team-agent",
             "--agent-profiles-file",
             "agents.json",
+            "--pi-profiles-file",
+            "pi.json",
         ]
     )
 
-    assert args.model_profile == "hosted-quality"
     assert args.model_profiles_file == Path("models.json")
     assert args.agent_profile == "team-agent"
     assert args.agent_profiles_file == Path("agents.json")
+    assert args.pi_profiles_file == Path("pi.json")
+
+
+def test_profile_commands_default_to_initialized_local_files():
+    doctor = build_parser().parse_args(["doctor", "--agent-profile", "team-agent"])
+    run = build_parser().parse_args(["run", "--agent-profile", "team-agent"])
+    listed = build_parser().parse_args(["agent-profiles"])
+
+    for args in (doctor, run, listed):
+        assert args.model_profiles_file == Path("configs/model-baselines.local.json")
+    assert doctor.env_file == Path(".env.local")
+    assert run.env_file == Path(".env.local")
 
 
 @pytest.mark.parametrize(
     "old_flag",
-    ["--profile", "--profiles", "--run-profile", "--agent-profiles"],
+    ["--profile", "--profiles", "--run-profile", "--model-profile"],
 )
 def test_old_ambiguous_profile_flags_are_not_supported(old_flag):
     with pytest.raises(SystemExit):
@@ -67,8 +75,8 @@ def test_old_ambiguous_profile_flags_are_not_supported(old_flag):
                 "benchmark",
                 old_flag,
                 "old-value",
-                "--model-profile",
-                "local-model",
+                "--agent-profile",
+                "local-agent",
                 "--run-name",
                 "old-flag-check",
             ]

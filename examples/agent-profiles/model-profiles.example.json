@@ -1,0 +1,53 @@
+{
+  "$schema": "../../configs/schemas/model-profiles.schema.json",
+  "version": 1,
+  "profiles": {
+    "example-model": {
+      "kind": "local",
+      "model": "openai/example-model",
+      "execution": {
+        "mode": "inspect-bridge",
+        "model_args": {},
+        "model_args_env": {
+          "base_url": "EXAMPLE_MODEL_BASE_URL",
+          "api_key": "EXAMPLE_MODEL_API_KEY"
+        },
+        "generate_config": {
+          "temperature": 0
+        }
+      },
+      "capabilities": {
+        "context_tokens": 32768,
+        "max_output_tokens": 8192,
+        "reasoning": false,
+        "input": ["text"]
+      },
+      "configuration": {
+        "provider": "public-example",
+        "model_revision": "example-snapshot"
+      }
+    },
+    "review-model": {
+      "kind": "local",
+      "model": "mockllm/reviewer",
+      "execution": {
+        "mode": "inspect-bridge",
+        "model_args": {},
+        "model_args_env": {},
+        "generate_config": {
+          "temperature": 0
+        }
+      },
+      "capabilities": {
+        "context_tokens": 32768,
+        "max_output_tokens": 8192,
+        "reasoning": false,
+        "input": ["text"]
+      },
+      "configuration": {
+        "provider": "Inspect scripted integration model",
+        "model_revision": "owned-review-example"
+      }
+    }
+  }
+}

@@ -18,6 +18,9 @@ solution. Maintainers check all five with:
 python scripts/check-starter-verifiers.py
 ```
 
+That proof is part of repository maintenance. Normal benchmark users do not
+need to run `prove-case` or supply reference solutions.
+
 Validate the dataset:
 
 ```bash

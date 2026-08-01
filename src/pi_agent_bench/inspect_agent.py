@@ -14,13 +14,18 @@ from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.util import StoreModel, sandbox, store_as
 from pydantic import Field
 
-from .agent_profiles import AgentProfile, AgentResource, vanilla_agent_profile
+from .agent_profiles import AgentProfile
+from .pi_profiles import PiProfile, PiResource
 from .pi_runner import (
     PiRunConfig,
-    build_bridge_models_config,
     build_command,
+    build_models_config,
+    model_patterns,
+    model_selector,
     parse_json_events,
+    summarise_direct_usage,
     summarise_events,
+    unconfigured_models,
 )
 from .versions import PI_VERSION
 
@@ -36,6 +41,10 @@ class PiTelemetry(StoreModel):
     non_json_lines: list[str] = Field(default_factory=list)
     stderr: str = ""
     summary: dict[str, int] = Field(default_factory=dict)
+    direct_usage: dict[str, Any] = Field(default_factory=dict)
+    direct_cost_reported_calls: int = 0
+    observed_models: list[dict[str, Any]] = Field(default_factory=list)
+    unattributed_assistant_calls: int = 0
 
 
 class PiCaseLimits(StoreModel):
@@ -67,16 +76,32 @@ def configure_pi_case() -> Solver:
 def pi_agent(
     timeout_seconds: int | None = None,
     context_tokens: int | None = None,
-    direct_provider: str | None = None,
-    direct_model: str | None = None,
-    direct_auth_file: str | None = None,
-    thinking_level: str | None = None,
     agent_profile: AgentProfile | None = None,
+    bridged_models: dict[str, Any] | None = None,
+    direct_auth_files: dict[str, str] | None = None,
     agent_runtime_env: dict[str, str] | None = None,
 ) -> Agent:
-    """Run Pi through Inspect's bridge or an isolated Pi subscription login."""
-    selected_agent = agent_profile or vanilla_agent_profile()
-    tools = selected_agent.tools
+    """Run one complete agent profile through bridge and/or Pi-direct resources."""
+    if agent_profile is None:
+        raise ValueError("pi_agent requires a composed agent profile")
+    selected_agent = agent_profile
+    selected_pi = selected_agent.pi_profile
+    configured_bridged_models = dict(bridged_models or {})
+    expected_bridged = {
+        resource.name
+        for resource in selected_agent.model_resources
+        if resource.execution_mode == "inspect-bridge"
+    }
+    if set(configured_bridged_models) != expected_bridged:
+        raise ValueError("bridged Inspect models do not match the agent profile resources")
+    configured_direct_auth_files = dict(direct_auth_files or {})
+    expected_direct = {
+        resource.name
+        for resource in selected_agent.model_resources
+        if resource.execution_mode == "pi-direct"
+    }
+    if set(configured_direct_auth_files) != expected_direct:
+        raise ValueError("direct authentication files do not match the agent profile resources")
     configured_runtime_env = dict(agent_runtime_env or {})
 
     async def execute(state: AgentState) -> AgentState:
@@ -100,47 +125,53 @@ def pi_agent(
         mkdir = await sandbox().exec(["mkdir", "-p", config_dir])
         if not mkdir.success:
             raise RuntimeError(f"could not create isolated Pi home: {mkdir.stderr}")
-        await _stage_agent_profile(selected_agent, config_dir)
-        if selected_agent.mcp_servers:
+        await _stage_pi_profile(selected_pi, config_dir)
+        if selected_pi.mcp_servers:
             runtime_env["PI_BENCH_MCP_CONFIG"] = f"{config_dir}/mcp-servers.json"
+        await _stage_direct_auth(
+            selected_agent,
+            configured_direct_auth_files,
+            config_dir,
+        )
+        guard_source = Path(__file__).with_name("pi_guard.py")
+        guard_path = f"{config_dir}/pi-guard.py"
+        await sandbox().write_file(
+            guard_path,
+            guard_source.read_text(encoding="utf-8"),
+        )
 
-        if direct_provider or direct_model or direct_auth_file:
-            if not all((direct_provider, direct_model, direct_auth_file)):
-                raise RuntimeError("direct Pi execution configuration is incomplete")
-            auth_source = Path(direct_auth_file)
-            try:
-                auth = json.loads(auth_source.read_text(encoding="utf-8"))
-                provider_auth = auth[direct_provider]
-            except (OSError, json.JSONDecodeError, KeyError) as exc:
-                raise RuntimeError(
-                    f"could not load {direct_provider} credentials from the configured Pi auth file"
-                ) from exc
+        async def run_pi(port: int | None):
             await sandbox().write_file(
-                f"{config_dir}/auth.json",
-                json.dumps({direct_provider: provider_auth}),
+                f"{config_dir}/models.json",
+                json.dumps(
+                    build_models_config(
+                        selected_agent.model_resources,
+                        port=port,
+                        context_tokens=sample_context,
+                    )
+                ),
             )
-            await sandbox().exec(["chmod", "600", f"{config_dir}/auth.json"])
-            guard_source = Path(__file__).with_name("pi_guard.py")
-            await sandbox().write_file(
-                "/tmp/pi-bench-pi-guard.py",
-                guard_source.read_text(encoding="utf-8"),
-            )
+            provider, model = model_selector(selected_agent.default_model)
+            thinking_level = selected_agent.default_model.thinking_level
+            if thinking_level == "none":
+                thinking_level = "off"
             config = PiRunConfig(
-                provider=direct_provider,
-                model=direct_model,
+                provider=provider,
+                model=model,
                 timeout_seconds=sample_timeout,
-                trust_mode=selected_agent.trust_mode,
-                tools=tools,
-                context_files_enabled=bool(selected_agent.context_files),
-                skills_enabled=bool(selected_agent.skills),
-                extensions_enabled=bool(selected_agent.extensions),
-                prompt_templates_enabled=bool(selected_agent.prompt_templates),
+                tools=selected_pi.tools,
+                model_patterns=model_patterns(selected_agent.model_resources),
+                context_files_enabled=True,
+                skills_enabled=bool(selected_pi.skills),
+                extensions_enabled=bool(selected_pi.extensions),
+                prompt_templates_enabled=bool(selected_pi.prompt_templates),
                 thinking_level=thinking_level,
             )
             command = build_command(config, prompt)
+            telemetry.command = list(command)
             guarded_command = [
                 "python3",
-                "/tmp/pi-bench-pi-guard.py",
+                guard_path,
                 "--max-turns",
                 str(limits.turns),
                 "--max-tokens",
@@ -148,74 +179,114 @@ def pi_agent(
                 "--",
                 *command,
             ]
-            telemetry.command = list(command)
             result = await _execute_pi(
                 guarded_command,
-                pi_home,
-                sample_timeout,
-                telemetry,
-                runtime_env,
-            )
-            events, non_json_lines = parse_json_events(result.stdout)
-            _record_telemetry(telemetry, result, events, non_json_lines)
-            final_text = _final_assistant_text(events)
-            state.messages.append(
-                ChatMessageAssistant(
-                    content=final_text,
-                    model=f"{direct_provider}/{direct_model}",
-                )
-            )
-            if not result.success and result.returncode != 75:
-                detail = result.stderr.strip() or "no stderr was produced"
-                raise RuntimeError(f"Pi exited with code {result.returncode}: {detail}")
-            return state
-
-        async with sandbox_agent_bridge(
-            state,
-            forward_generation_config=False,
-        ) as bridge:
-            await sandbox().write_file(
-                f"{config_dir}/models.json",
-                json.dumps(
-                    build_bridge_models_config(
-                        port=bridge.port,
-                        context_tokens=sample_context,
-                    )
-                ),
-            )
-
-            config = PiRunConfig(
-                provider="inspect-bridge",
-                model="inspect",
-                timeout_seconds=sample_timeout,
-                trust_mode=selected_agent.trust_mode,
-                tools=tools,
-                context_files_enabled=bool(selected_agent.context_files),
-                skills_enabled=bool(selected_agent.skills),
-                extensions_enabled=bool(selected_agent.extensions),
-                prompt_templates_enabled=bool(selected_agent.prompt_templates),
-            )
-            command = build_command(config, prompt)
-            telemetry.command = list(command)
-            result = await _execute_pi(
-                list(command),
                 pi_home,
                 sample_timeout,
                 telemetry,
                 {"OPENAI_API_KEY": "inspect", **runtime_env},
             )
             events, non_json_lines = parse_json_events(result.stdout)
-            _record_telemetry(telemetry, result, events, non_json_lines)
-
+            _record_telemetry(
+                telemetry,
+                result,
+                events,
+                non_json_lines,
+                selected_agent,
+            )
+            _reject_unconfigured_models(events, selected_agent)
             if not result.success:
                 detail = result.stderr.strip() or "no stderr was produced"
+                if result.returncode == 75:
+                    raise RuntimeError(f"Pi profile-wide limit exceeded: {detail}")
                 raise RuntimeError(f"Pi exited with code {result.returncode}: {detail}")
-            return bridge.state
+            return events
+
+        if configured_bridged_models:
+            async with sandbox_agent_bridge(
+                state,
+                model_aliases=configured_bridged_models,
+                forward_generation_config=False,
+            ) as bridge:
+                events = await run_pi(bridge.port)
+                _append_direct_final_message(bridge.state, events, selected_agent)
+                return bridge.state
+
+        events = await run_pi(None)
+        final_text = _final_assistant_text(events)
+        if final_text:
+            provider, model = model_selector(selected_agent.default_model)
+            state.messages.append(
+                ChatMessageAssistant(content=final_text, model=f"{provider}/{model}")
+            )
+        return state
 
     return execute
 
 
-async def _stage_agent_profile(profile: AgentProfile, config_dir: str) -> None:
+async def _stage_direct_auth(
+    profile: AgentProfile,
+    auth_files: dict[str, str],
+    config_dir: str,
+) -> None:
+    staged: dict[str, Any] = {}
+    for resource in profile.model_resources:
+        if resource.execution_mode != "pi-direct":
+            continue
+        provider = resource.direct_provider
+        assert provider is not None
+        auth_source = Path(auth_files[resource.name])
+        try:
+            payload = json.loads(auth_source.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise TypeError("authentication document must be an object")
+            provider_auth = payload[provider]
+        except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise RuntimeError(
+                f"could not load {provider} credentials for resource {resource.name}"
+            ) from exc
+        if provider in staged and staged[provider] != provider_auth:
+            raise RuntimeError(
+                f"direct resources supplied conflicting authentication for {provider}"
+            )
+        staged[provider] = provider_auth
+    if not staged:
+        return
+    destination = f"{config_dir}/auth.json"
+    await sandbox().write_file(destination, json.dumps(staged))
+    changed = await sandbox().exec(["chmod", "600", destination])
+    if not changed.success:
+        raise RuntimeError(f"could not protect staged Pi authentication: {changed.stderr}")
+
+
+def _append_direct_final_message(
+    state: AgentState,
+    events: tuple[dict[str, Any], ...],
+    profile: AgentProfile,
+) -> None:
+    """Retain a final direct response that did not pass through Inspect's bridge."""
+    direct_models = {
+        (resource.direct_provider, resource.direct_model)
+        for resource in profile.model_resources
+        if resource.execution_mode == "pi-direct"
+    }
+    for event in reversed(events):
+        message = event.get("message")
+        if not isinstance(message, dict) or message.get("role") != "assistant":
+            continue
+        provider = message.get("provider")
+        model = message.get("model")
+        if (provider, model) not in direct_models:
+            return
+        text = _assistant_text(message)
+        if text:
+            state.messages.append(
+                ChatMessageAssistant(content=text, model=f"{provider}/{model}")
+            )
+        return
+
+
+async def _stage_pi_profile(profile: PiProfile, config_dir: str) -> None:
     await sandbox().write_file(
         f"{config_dir}/settings.json",
         json.dumps(profile.settings, sort_keys=True),
@@ -248,12 +319,12 @@ async def _stage_agent_profile(profile: AgentProfile, config_dir: str) -> None:
         )
 
 
-def _single_text_resource(resource: AgentResource, expected_name: str) -> str:
+def _single_text_resource(resource: PiResource, expected_name: str) -> str:
     return resource.text(expected_name)
 
 
 def _joined_text_resources(
-    resources: tuple[AgentResource, ...],
+    resources: tuple[PiResource, ...],
     expected_name: str,
 ) -> str:
     return (
@@ -267,7 +338,7 @@ def _joined_text_resources(
 
 
 async def _stage_resource_group(
-    resources: tuple[AgentResource, ...],
+    resources: tuple[PiResource, ...],
     destination_root: str,
     single_name: str | None = None,
 ) -> None:
@@ -323,7 +394,13 @@ async def _execute_pi(
     return result
 
 
-def _record_telemetry(telemetry, result, events, non_json_lines) -> None:
+def _record_telemetry(
+    telemetry,
+    result,
+    events,
+    non_json_lines,
+    profile: AgentProfile,
+) -> None:
     telemetry.return_code = result.returncode
     telemetry.stderr = result.stderr
     telemetry.events = list(events)
@@ -339,6 +416,28 @@ def _record_telemetry(telemetry, result, events, non_json_lines) -> None:
         "cached_input_tokens": summary.cached_input_tokens,
         "output_tokens": summary.output_tokens,
     }
+    direct_models = {
+        (resource.direct_provider, resource.direct_model)
+        for resource in profile.model_resources
+        if resource.execution_mode == "pi-direct"
+    }
+    direct = summarise_direct_usage(events, direct_models)
+    telemetry.direct_usage = direct.aggregate
+    telemetry.direct_cost_reported_calls = direct.cost_reported_calls
+    telemetry.observed_models = list(direct.observed_models)
+    telemetry.unattributed_assistant_calls = direct.unattributed_assistant_calls
+
+
+def _reject_unconfigured_models(
+    events: tuple[dict[str, Any], ...],
+    profile: AgentProfile,
+) -> None:
+    unexpected = unconfigured_models(events, profile.model_resources)
+    if unexpected:
+        raise RuntimeError(
+            "Pi used model(s) outside the composed agent profile: "
+            + ", ".join(unexpected)
+        )
 
 
 def _final_assistant_text(events: tuple[dict[str, Any], ...]) -> str:
@@ -346,14 +445,18 @@ def _final_assistant_text(events: tuple[dict[str, Any], ...]) -> str:
         message = event.get("message")
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        text = "".join(
-            block.get("text", "")
-            for block in content
-            if isinstance(block, dict) and block.get("type") == "text"
-        ).strip()
+        text = _assistant_text(message)
         if text:
             return text
     return ""
+
+
+def _assistant_text(message: dict[str, Any]) -> str:
+    content = message.get("content")
+    if not isinstance(content, list):
+        return ""
+    return "".join(
+        block.get("text", "")
+        for block in content
+        if isinstance(block, dict) and block.get("type") == "text"
+    ).strip()

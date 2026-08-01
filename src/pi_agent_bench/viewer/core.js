@@ -1,4 +1,5 @@
     const palette = ["#7ee095", "#7db9ff", "#ffca70", "#d59cff", "#ff817b", "#68e2da"];
+    const ALL_RUNS = "__all_runs__";
     const friendly = {
       "quality.success": "Success rate",
       "quality.score": "Quality score",
@@ -43,9 +44,39 @@
 
     function parseJsonl(text) {
       return text.split(/\r?\n/).filter(Boolean).map((line, index) => {
-        try { return JSON.parse(line); }
+        try { return normaliseMetricRow(JSON.parse(line)); }
         catch (error) { throw new Error(`Invalid JSON on line ${index + 1}: ${error.message}`); }
       }).filter(row => typeof row.value === "number");
+    }
+
+    function normaliseMetricRow(row) {
+      if (row.schema_version !== 1) return row;
+      const observed = row.model
+        ? [{ provider: row.provider, model: row.model, execution: "legacy" }]
+        : [];
+      return {
+        ...row,
+        run_name: row.run_name || row.campaign || "default",
+        benchmark_id:
+          row.benchmark_id || row.campaign_id || row.campaign || row.run_name ||
+          "legacy-campaign",
+        cohort_fingerprint:
+          row.cohort_fingerprint || row.benchmark_fingerprint || "legacy-cohort",
+        sandbox_image_id: row.sandbox_image_id || row.sandbox_image,
+        harness_source_fingerprint:
+          row.harness_source_fingerprint || row.benchmark_fingerprint,
+        pi_profile: row.pi_profile || row.agent_profile || "legacy-profile",
+        model_resources: row.model_resources || row.model || "unreported",
+        default_model_resource:
+          row.default_model_resource || row.model || "unreported",
+        agent_profile_fingerprint:
+          row.agent_profile_fingerprint || row.configuration_fingerprint,
+        agent_profile_json:
+          row.agent_profile_json || row.configuration_json || "",
+        observed_models_json:
+          row.observed_models_json || JSON.stringify(observed),
+        cost_coverage: row.cost_coverage || "complete"
+      };
     }
 
     async function loadDefault() {
@@ -74,8 +105,10 @@
       }));
       refreshCohortControls();
       const metrics = unique(state.all.map(row => row.metric));
-      $("metric").innerHTML = metrics.map(metric => optionHtml(metric, label(metric))).join("");
-      $("metric").value = metrics.includes("quality.score") ? "quality.score" : metrics[0];
+      const metricOptions = metrics.map(metric => optionHtml(metric, label(metric))).join("");
+      const initialMetric = metrics.includes("quality.score") ? "quality.score" : metrics[0];
+      $("metric").innerHTML = metricOptions;
+      $("metric").value = initialMetric;
       $("status").textContent = `${unique(state.all.map(sampleKey)).length} samples loaded`;
       render();
     }
@@ -83,17 +116,30 @@
     function refreshCohortControls() {
       setOptions("dataset", unique(state.all.map(row => row.dataset_version)));
       const versionRows = state.all.filter(row => row.dataset_version === $("dataset").value);
-      setOptions("run_name", unique(versionRows.map(row => row.run_name)), "default");
-      const runRows = versionRows.filter(row => row.run_name === $("run_name").value);
+      setOptions("cohort", unique(versionRows.map(row => row.cohort_fingerprint)));
+      const cohortRows = versionRows.filter(
+        row => row.cohort_fingerprint === $("cohort").value
+      );
+      const runNames = unique(cohortRows.map(row => row.run_name));
+      const previousRun = $("run_name").value;
+      $("run_name").innerHTML = [
+        optionHtml(ALL_RUNS, "All runs"),
+        ...runNames.map(value => optionHtml(value))
+      ].join("");
+      $("run_name").value = runNames.includes(previousRun) ? previousRun : ALL_RUNS;
+      const runRows = $("run_name").value === ALL_RUNS
+        ? cohortRows
+        : cohortRows.filter(row => row.run_name === $("run_name").value);
       setOptions("cache", unique(runRows.map(row => row.cache_state)), "unspecified");
     }
 
     function render() {
-      state.rawCohort = state.all.filter(row =>
-        row.dataset_version === $("dataset").value &&
-        row.run_name === $("run_name").value &&
-        row.cache_state === $("cache").value
-      );
+      state.rawCohort = selectComparisonRows(state.all, {
+        datasetVersion: $("dataset").value,
+        cohortFingerprint: $("cohort").value,
+        runName: $("run_name").value,
+        cacheState: $("cache").value
+      });
       const profiles = unique(state.rawCohort.map(row => row.profile));
       setOptions("baseline", profiles, $("baseline").value || profiles[0]);
       const profileCases = profiles.map(profile =>
@@ -133,7 +179,7 @@
       renderCoverage();
       renderDetails();
       $("cohort-label").textContent =
-        `outcomes · dataset ${$("dataset").value} · ${$("run_name").value} · ${$("cache").value} cache`;
+        `outcomes · dataset ${$("dataset").value} · cohort ${$("cohort").value.slice(0, 12)} · ${$("run_name").selectedOptions[0]?.textContent || "all runs"} · ${$("cache").value} cache`;
     }
 
     function buildSummaries(rows) {
@@ -144,28 +190,33 @@
         const success = metricRows(profileRows, "quality.success");
         const quality = metricRows(profileRows, "quality.score");
         const successfulWall = successfulMetricValues(profileRows, "time.wall");
-        const cost = successfulMetricValues(profileRows, "cost.provider_reported");
+        const costRows = metricRows(profileRows, "cost.provider_reported");
         const successfulTokens = successfulMetricValues(profileRows, "tokens.total");
         const delta = matchedQualityDelta(rows, profile, baseline);
         const ranks = repetitionRanks(rows, profile);
-        const configuration = profileRows.find(row => row.configuration_json)?.configuration_json;
-        const agentConfiguration =
-          profileRows.find(row => row.agent_configuration_json)?.agent_configuration_json;
-        const agentProfile =
-          profileRows.find(row => row.agent_profile)?.agent_profile || "vanilla";
+        const profileJson = profileRows.find(row => row.agent_profile_json)?.agent_profile_json;
+        const modelResources =
+          profileRows.find(row => row.model_resources)?.model_resources || "unreported";
+        const piProfile =
+          profileRows.find(row => row.pi_profile)?.pi_profile || "unreported";
+        const defaultResource =
+          profileRows.find(row => row.default_model_resource)?.default_model_resource || "unreported";
+        const observedModelsJson =
+          profileRows.find(row => row.observed_models_json)?.observed_models_json || "[]";
+        const coverageStates = unique(profileRows.map(row => row.cost_coverage));
+        const costCoverage = coverageStates.length === 1
+          ? coverageStates[0]
+          : (coverageStates.every(value => value === "unavailable") ? "unavailable" : "partial");
         return {
           profile,
-          kind: profileRows.find(row => row.profile_kind)?.profile_kind || "unspecified",
-          model: profileRows.find(row => row.model)?.model || "model identity unavailable",
-          provider: profileRows.find(row => row.provider)?.provider || "unreported",
-          configuration:
-            `model: ${configuration ? compactConfiguration(configuration) : "unreported"}; ` +
-            `agent (${agentProfile}): ${agentConfiguration ? compactConfiguration(agentConfiguration) : "unreported"}`,
-          configurationFingerprint:
-            profileRows.find(row => row.configuration_fingerprint)?.configuration_fingerprint,
+          piProfile,
+          modelResources,
+          defaultResource,
+          observedModels: compactObservedModels(observedModelsJson),
+          configuration: profileJson ? "composed profile recorded" : "unreported",
           agentConfigurationFingerprint:
-            profileRows.find(row => row.agent_configuration_fingerprint)
-              ?.agent_configuration_fingerprint,
+            profileRows.find(row => row.agent_profile_fingerprint)
+              ?.agent_profile_fingerprint,
           cases: unique(quality.map(row => row.case_id)).length,
           rawCases: unique(metricRows(
             state.rawCohort.filter(row => row.profile === profile),
@@ -186,8 +237,9 @@
             profileRows,
             "speed.observed_output_tokens_per_model_second"
           ).map(row => row.value)),
-          costPerSuccess: mean(cost),
-          costUnit: metricRows(profileRows, "cost.provider_reported")[0]?.unit || null,
+          cost: sumOrNull(costRows.map(row => row.value)),
+          costCoverage,
+          costUnit: costRows[0]?.unit || "cost",
           delta,
           rankRange: ranks.length ? `${Math.min(...ranks)}–${Math.max(...ranks)}` : "—"
         };
@@ -214,12 +266,24 @@
       return mean([...cases.values()].map(mean));
     }
 
+    function compactObservedModels(value) {
+      try {
+        const models = JSON.parse(value);
+        if (!Array.isArray(models) || !models.length) return "unavailable";
+        return models.map(item =>
+          `${item.provider ? `${item.provider}/` : ""}${item.model || "unknown"} (${item.execution || "unknown"})`
+        ).join(", ");
+      } catch {
+        return "unavailable";
+      }
+    }
+
     function renderNotice(cases, profileNames) {
       const profiles = profileNames.length;
       const attempts = unique(
         metricRows(state.cohort, "quality.score").map(sampleKey)
       ).length;
-      const fingerprints = unique(state.cohort.map(row => row.benchmark_fingerprint));
+      const fingerprints = unique(state.cohort.map(row => row.cohort_fingerprint));
       const synthetic = state.cohort.some(row => row.synthetic === true);
       const readiness = comparisonReadiness(
         cases,
@@ -244,7 +308,7 @@
       }
       if (!synthetic && fingerprints.length > 1) {
         $("data-badge").textContent = "MIXED BUILD";
-        $("data-notice").textContent += ` ${fingerprints.length} benchmark fingerprints are present; interpret the time trend as a build comparison.`;
+        $("data-notice").textContent += ` ${fingerprints.length} cohort fingerprints are present; these profiles are not comparable.`;
       }
     }
 
@@ -253,9 +317,9 @@
         <tr>
           <td class="number">${state.rankingReady ? index + 1 : "—"}</td>
           <td class="model">${escapeHtml(summary.profile)}</td>
-          <td>${escapeHtml(summary.model)}</td>
-          <td>${escapeHtml(summary.kind)}</td>
-          <td>${escapeHtml(summary.provider)}</td>
+          <td>${escapeHtml(summary.piProfile)}</td>
+          <td>${escapeHtml(summary.modelResources)}</td>
+          <td>${escapeHtml(summary.defaultResource)}</td>
           <td class="number">${summary.rawCases} / ${state.unionCases.length || summary.rawCases}</td>
           <td class="number">${formatNumber(summary.trialsPerCase)}</td>
           <td class="number">${escapeHtml(summary.rankRange)}</td>
@@ -265,7 +329,8 @@
           <td class="number">${formatMetric(summary.wall, "seconds")}</td>
           <td class="number">${formatMetric(summary.tokensPerSuccess, "tokens")}</td>
           <td class="number">${formatMetric(summary.observedTokensPerSecond, "tokens/second")}</td>
-          <td class="number">${formatMetric(summary.costPerSuccess, summary.costUnit)}</td>
-          <td class="model">${escapeHtml(summary.configuration)}<small>model ${escapeHtml((summary.configurationFingerprint || "unreported").slice(0, 12))} · agent ${escapeHtml((summary.agentConfigurationFingerprint || "unreported").slice(0, 12))}</small></td>
-        </tr>`).join("") : `<tr><td colspan="16"><div class="empty">No comparable results in this cohort.</div></td></tr>`;
+          <td class="number">${escapeHtml(formatMetric(summary.cost, summary.costUnit))} · ${escapeHtml(summary.costCoverage)}</td>
+          <td class="model">${escapeHtml(summary.observedModels)}</td>
+          <td class="model">${escapeHtml(summary.configuration)}<small>agent ${escapeHtml((summary.agentConfigurationFingerprint || "unreported").slice(0, 12))}</small></td>
+        </tr>`).join("") : `<tr><td colspan="17"><div class="empty">No comparable results in this cohort.</div></td></tr>`;
     }

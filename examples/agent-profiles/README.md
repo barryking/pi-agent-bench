@@ -1,276 +1,87 @@
-# Runnable agent-profile examples
+# Runnable profile examples
 
-These small examples show how a file on the Mac becomes part of Pi inside a
-benchmark trial.
+This directory contains public, owned examples for every profile layer.
 
-They are owned by this project. They do not download packages or copy another
-repository.
-
-## See the profiles
-
-```bash
-pi-bench agent-profiles \
-  --agent-profiles-file examples/agent-profiles/agent-profiles.example.json
-```
-
-The file contains focused profiles and one `example-everything` profile used
-by the integration check.
-
-## The common loading path
+## Files
 
 ```text
-file in examples/agent-profiles/
-  → named by agent-profiles.example.json
-  → checked and hashed on the Mac
-  → copied into a new temporary Pi home inside Docker
-  → discovered by Pi 0.82.1
-  → removed with the trial container
-```
-
-The source directory is not mounted into Docker. Result records contain safe
-hashes, not the file contents.
-
-## AGENTS.md guidance
-
-Source:
-
-```text
+pi-profiles.example.json
+model-profiles.example.json
+agent-profiles.example.json
 guidance/AGENTS.md
-```
-
-Profile entry:
-
-```json
-{
-  "context_files": [
-    {
-      "name": "example-guidance",
-      "path": "guidance/AGENTS.md"
-    }
-  ]
-}
-```
-
-Pi Agent Bench copies it to:
-
-```text
-/tmp/pi-bench-pi-home/.pi/agent/AGENTS.md
-```
-
-Pi adds the guidance to its system prompt. In Inspect, open the model input and
-look for `BENCHMARK_GUIDANCE_MARKER`.
-
-## Skill
-
-Source:
-
-```text
 skills/test-first/SKILL.md
-```
-
-Profile entry:
-
-```json
-{
-  "skills": [
-    {
-      "name": "test-first",
-      "path": "skills/test-first"
-    }
-  ]
-}
-```
-
-Pi sees the skill name and description in its system prompt. It reads the full
-`SKILL.md` only when the task needs it or the prompt calls
-`/skill:benchmark-test-first`.
-
-In Inspect, look for `benchmark-test-first` in the system prompt. If Pi reads
-the complete skill, its file-read event contains `BENCHMARK_SKILL_MARKER`.
-
-## Extension and custom tool
-
-Source:
-
-```text
-extensions/repository-info.ts
-```
-
-The profile must do two things:
-
-1. name the extension file; and
-2. add its registered tool name to the profile tool list.
-
-```json
-{
-  "tools": [
-    "read",
-    "bash",
-    "edit",
-    "write",
-    "grep",
-    "find",
-    "ls",
-    "repository_info"
-  ],
-  "extensions": [
-    {
-      "name": "repository-info",
-      "path": "extensions/repository-info.ts"
-    }
-  ]
-}
-```
-
-Pi loads the TypeScript file from its temporary global extensions folder. The
-extension registers `repository_info`.
-
-In Inspect:
-
-- the first model request lists `repository_info` as a tool; and
-- a tool call result contains `BENCHMARK_EXTENSION_MARKER`.
-
-An extension must be self-contained or use software already present in the
-pinned Docker image. Trials do not install packages.
-
-## Prompt template
-
-Source:
-
-```text
 prompts/benchmark-review.md
+extensions/repository-info.ts
+extensions/model-switch.ts
+extensions/mcp-client/index.ts
+extensions/mcp-client/server.py
 ```
 
-Profile entry:
+`pi-profiles.example.json` demonstrates:
 
-```json
-{
-  "prompt_templates": [
-    {
-      "name": "benchmark-review",
-      "path": "prompts/benchmark-review.md"
-    }
-  ]
-}
-```
+- global `AGENTS.md` guidance;
+- one owned skill;
+- one owned extension tool;
+- one prompt template;
+- an MCP client extension and owned stdio server; and
+- a model-switch extension using `ctx.modelRegistry` and `pi.setModel`.
 
-Installing a prompt template does not change a normal case by itself. A case
-must invoke it. For this example, the case instruction would start with:
+`model-profiles.example.json` defines two bridge resources.
+`agent-profiles.example.json` composes the full Pi profile with both resources
+and starts with `example-model`. After the first tool result, the owned
+extension selects `review-model` through Pi's native registry.
 
-```text
-/benchmark-review README.md
-```
+This is intentionally profile behaviour, not a benchmark routing policy.
 
-Pi expands that text before calling the model. In Inspect, the user message
-contains `BENCHMARK_TEMPLATE_MARKER` and the expanded instructions instead of
-the slash command.
-
-This means a prompt template is an active part of the case design, not passive
-background guidance. Use `AGENTS.md` or an appended system prompt when every
-ordinary task should receive the same instruction.
-
-## MCP server
-
-Pi has no built-in general MCP client. An MCP profile therefore needs:
-
-1. an extension that acts as the MCP client;
-2. the server program or endpoint;
-3. an `mcp_servers` entry; and
-4. every exposed MCP tool in the profile tool list.
-
-The owned example contains:
-
-```text
-extensions/mcp-client/index.ts  Pi extension and MCP client
-extensions/mcp-client/server.py tiny stdio MCP server
-```
-
-The important profile parts are:
-
-```json
-{
-  "tools": [
-    "read",
-    "bash",
-    "edit",
-    "write",
-    "grep",
-    "find",
-    "ls",
-    "example_catalog_lookup"
-  ],
-  "extensions": [
-    {
-      "name": "mcp-client",
-      "path": "extensions/mcp-client"
-    }
-  ],
-  "mcp_servers": [
-    {
-      "name": "example-catalog",
-      "extension": "mcp-client",
-      "transport": "stdio",
-      "server": "example-catalog",
-      "tools": ["example_catalog_lookup"]
-    }
-  ]
-}
-```
-
-At run time:
-
-```text
-Pi
-  → example_catalog_lookup tool
-  → mcp-client extension
-  → JSON-RPC over stdio
-  → owned Python MCP server
-```
-
-Pi Agent Bench writes the selected `mcp_servers` list inside Docker and sets:
-
-```text
-PI_BENCH_MCP_CONFIG
-```
-
-The extension reads that file. The JSON list does not connect to anything on
-its own.
-
-The owned client is deliberately small. It supports only its bundled stdio
-catalog server. For a real MCP service, use a reviewed and pinned extension
-that supports the required transport, authentication, schemas, errors, and
-server lifecycle. Pass private addresses and credentials with `runtime_env`;
-never put them in the profile JSON.
-
-In Inspect, a successful call to `example_catalog_lookup` contains
-`BENCHMARK_MCP_MARKER`.
-
-## Run one example profile
-
-Use any configured model:
+## Verify loading
 
 ```bash
-pi-bench run \
-  --model-profile hosted-quality \
-  --model-profiles-file configs/model-baselines.local.json \
-  --agent-profile example-extension \
+pi-bench pi-profiles \
+  --pi-profiles-file examples/agent-profiles/pi-profiles.example.json
+
+pi-bench agent-profiles \
   --agent-profiles-file examples/agent-profiles/agent-profiles.example.json \
+  --pi-profiles-file examples/agent-profiles/pi-profiles.example.json \
+  --model-profiles-file examples/agent-profiles/model-profiles.example.json
+```
+
+The automated Docker check:
+
+```bash
+scripts/check-agent-profile-examples.py
+```
+
+proves that:
+
+1. global guidance reaches Pi;
+2. the skill appears in Pi's system prompt;
+3. the prompt template expands;
+4. the extension tool runs;
+5. the MCP extension calls its owned server;
+6. the extension switches between two bridged Inspect aliases; and
+7. Inspect logs export into agent-profile-first dashboard records.
+
+The example model endpoint names are illustrative. Do not put private URLs or
+credentials into public JSON. Bridge constructor secrets belong in
+`model_args_env`; Pi-tool secrets belong in the Pi profile's `runtime_env`.
+
+## Use the structure privately
+
+Copy the Pi profile into `configs/pi-profiles.local.json`, point its resources
+at private files, define real model resources, then compose them in
+`configs/agent-profiles.local.json`.
+
+```bash
+pi-bench benchmark \
+  --agent-profile my-complete-agent \
+  --agent-profiles-file configs/agent-profiles.local.json \
+  --pi-profiles-file configs/pi-profiles.local.json \
+  --model-profiles-file configs/model-baselines.local.json \
   --env-file .env.local \
   --dataset evals/starter/cases.jsonl \
-  --run-name agent-extension-example
+  --run-name my-profile-check-v1 \
+  --epochs 3 \
+  --resume
 ```
 
-The model decides whether the task needs `repository_info`. Use Inspect to
-confirm whether it called the tool.
-
-## Prove every example automatically
-
-Build the pinned image, then run:
-
-```bash
-pi-bench build-sandbox
-python scripts/check-agent-profile-examples.py
-```
-
-The check uses a scripted Inspect model so tool use is not left to chance. It
-proves all five resource types inside a real Pi Docker trial.
+Only commit examples safe to make public.

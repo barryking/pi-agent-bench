@@ -6,6 +6,8 @@ const {
   comparisonReadiness,
   matchedQualityDelta,
   metricInterval,
+  selectComparisonRows,
+  sumOrNull,
   successfulMetricValues,
   wilsonInterval
 } = require("../../src/pi_agent_bench/viewer/statistics.js");
@@ -43,6 +45,18 @@ test("quality delta is described as matched rather than paired", () => {
   assert.ok(Math.abs(delta.mean - 0.3) < 1e-12);
 });
 
+test("quality delta matches profiles within the same benchmark campaign", () => {
+  const rows = [
+    { metric: "quality.score", benchmark_id: "first", profile: "base", case_id: "a", trial_number: 1, value: 0.1 },
+    { metric: "quality.score", benchmark_id: "first", profile: "model", case_id: "a", trial_number: 1, value: 0.2 },
+    { metric: "quality.score", benchmark_id: "second", profile: "base", case_id: "a", trial_number: 1, value: 0.8 },
+    { metric: "quality.score", benchmark_id: "second", profile: "model", case_id: "a", trial_number: 1, value: 1.0 }
+  ];
+  const delta = matchedQualityDelta(rows, "model", "base");
+  assert.equal(delta.matches, 2);
+  assert.ok(Math.abs(delta.mean - 0.15) < 1e-12);
+});
+
 test("successful metrics are matched to the exact case and repetition", () => {
   const rows = [
     { metric: "quality.success", run_id: "same-run", case_id: "pass", trial_number: 1, value: 1 },
@@ -54,11 +68,31 @@ test("successful metrics are matched to the exact case and repetition", () => {
   assert.deepEqual(successfulMetricValues(rows, "time.wall"), [10]);
 });
 
+test("missing cost rows stay unavailable instead of becoming zero", () => {
+  assert.equal(sumOrNull([]), null);
+  assert.equal(sumOrNull([0.02, 0.03]), 0.05);
+});
+
+test("dashboard selection never mixes cohort fingerprints and can pool run labels", () => {
+  const rows = [
+    { dataset_version: "v1", cohort_fingerprint: "one", run_name: "first", cache_state: "warm" },
+    { dataset_version: "v1", cohort_fingerprint: "one", run_name: "second", cache_state: "warm" },
+    { dataset_version: "v1", cohort_fingerprint: "two", run_name: "first", cache_state: "warm" }
+  ];
+  const selected = selectComparisonRows(rows, {
+    datasetVersion: "v1",
+    cohortFingerprint: "one",
+    runName: "__all_runs__",
+    cacheState: "warm"
+  });
+  assert.deepEqual(selected.map(row => row.run_name), ["first", "second"]);
+});
+
 test("ranking requires identical coverage and complete version evidence", () => {
   const cases = ["a", "b", "c", "d", "e"];
   const profiles = ["one", "two"];
   const dimensions = {
-    benchmark_fingerprint: "bench",
+    cohort_fingerprint: "cohort",
     scoring_method: "verifier",
     framework_version: "1",
     inspect_version: "1",
@@ -78,8 +112,25 @@ test("ranking requires identical coverage and complete version evidence", () => 
 
   assert.equal(comparisonReadiness(cases, profiles, cohort, true).ready, true);
   assert.equal(comparisonReadiness(cases, profiles, cohort, false).ready, false);
+  const unevenTrials = cohort.filter(row =>
+    !(row.profile === "two" && row.case_id === "e" && row.trial_number === 3)
+  );
+  assert.ok(
+    comparisonReadiness(cases, profiles, unevenTrials, true).missing.includes(
+      "identical completed trial counts"
+    )
+  );
   const missingPi = cohort.map(row => ({ ...row, pi_version: null }));
   assert.ok(
     comparisonReadiness(cases, profiles, missingPi, true).missing.includes("one Pi version")
+  );
+  const mixedSandbox = cohort.map((row, index) => ({
+    ...row,
+    sandbox_image_id: index === 0 ? "sha256:other" : row.sandbox_image_id
+  }));
+  assert.ok(
+    comparisonReadiness(cases, profiles, mixedSandbox, true).missing.includes(
+      "one sandbox image"
+    )
   );
 });

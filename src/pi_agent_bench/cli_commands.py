@@ -7,6 +7,7 @@ import json
 
 from .agent_profiles import load_agent_profiles
 from .model_profiles import load_profiles
+from .pi_profiles import load_pi_profiles
 from .versions import FRAMEWORK_VERSION, INSPECT_VERSION, PI_VERSION, SANDBOX_IMAGE
 
 
@@ -17,7 +18,7 @@ def _command_init(args: argparse.Namespace) -> None:
         print(f"{status}: {path}")
     print(
         "next: edit .env.local, configs/model-baselines.local.json, "
-        "and configs/agent-profiles.local.json"
+        "configs/pi-profiles.local.json, and configs/agent-profiles.local.json"
     )
 
 
@@ -34,7 +35,10 @@ def _command_new_case(args: argparse.Namespace) -> None:
         raise SystemExit(str(exc)) from exc
     for path in paths:
         print(f"created: {path}")
-    print(f"next: edit the scaffold, then pi-bench validate {args.dataset}")
+    print(
+        "next: follow docs/scoring-and-extending.md; edit the draft, then "
+        f"pi-bench validate {args.dataset}"
+    )
 
 
 def _command_validate(args: argparse.Namespace) -> None:
@@ -53,14 +57,28 @@ def _command_model_profiles(args: argparse.Namespace) -> None:
 
 
 def _command_agent_profiles(args: argparse.Namespace) -> None:
-    for profile in load_agent_profiles(args.agent_profiles_file).values():
+    profiles = load_agent_profiles(
+        args.agent_profiles_file,
+        pi_profiles=load_pi_profiles(args.pi_profiles_file),
+        model_profiles=load_profiles(args.model_profiles_file),
+    )
+    for profile in profiles.values():
         print(
-            f"{profile.name}: tools={','.join(profile.tools)}; "
-            f"resources={_agent_resource_count(profile)}"
+            f"{profile.name}: pi-profile={profile.pi_profile.name}; "
+            f"resources={','.join(resource.name for resource in profile.model_resources)}; "
+            f"default={profile.default_model_resource}"
         )
 
 
-def _agent_resource_count(profile) -> int:
+def _command_pi_profiles(args: argparse.Namespace) -> None:
+    for profile in load_pi_profiles(args.pi_profiles_file).values():
+        print(
+            f"{profile.name}: tools={','.join(profile.tools)}; "
+            f"resources={_pi_resource_count(profile)}"
+        )
+
+
+def _pi_resource_count(profile) -> int:
     return sum(
         len(resources)
         for resources in (

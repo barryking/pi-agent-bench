@@ -6,6 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .schema_versions import (
+    RUN_RECORD_SCHEMA_VERSION,
+    SUPPORTED_RUN_RECORD_SCHEMA_VERSIONS,
+)
+
 
 def load_records(source: Path) -> list[dict[str, Any]]:
     records = []
@@ -21,82 +26,82 @@ def load_records(source: Path) -> list[dict[str, Any]]:
 
 
 def validate_record(record: dict[str, Any], path: Path) -> None:
-    if record.get("schema_version") != 4:
-        raise ValueError(f"{path}: expected run record schema_version 4")
+    schema_version = record.get("schema_version")
+    if schema_version not in SUPPORTED_RUN_RECORD_SCHEMA_VERSIONS:
+        supported = ", ".join(
+            str(value) for value in sorted(SUPPORTED_RUN_RECORD_SCHEMA_VERSIONS)
+        )
+        raise ValueError(f"{path}: supported run record schema versions are {supported}")
     for field in ("run_id", "case_id", "dataset_version", "run_name"):
         if not isinstance(record.get(field), str) or not record[field]:
             raise ValueError(f"{path}: run record is missing {field}")
+    if schema_version == RUN_RECORD_SCHEMA_VERSION and (
+        not isinstance(record.get("benchmark_id"), str) or not record["benchmark_id"]
+    ):
+        raise ValueError(f"{path}: run record is missing benchmark_id")
     if record.get("cache_state") not in {"unspecified", "cold", "warm"}:
         raise ValueError(f"{path}: cache_state must be unspecified, cold, or warm")
-    for field in ("model_configuration", "agent_configuration"):
-        identity = record.get(field)
-        if not isinstance(identity, dict) or not identity.get("profile"):
-            raise ValueError(f"{path}: run record is missing {field}.profile")
-        if not isinstance(identity.get("configuration"), dict):
-            raise ValueError(f"{path}: run record is missing {field}.configuration")
-        if not identity.get("configuration_fingerprint"):
-            raise ValueError(
-                f"{path}: run record is missing {field}.configuration_fingerprint"
-            )
+    agent = agent_configuration(record)
+    required_agent = {
+        "profile",
+        "pi_profile",
+        "model_resources",
+        "default_model_resource",
+        "configuration_fingerprint",
+    }
+    if not required_agent.issubset(agent):
+        raise ValueError(f"{path}: run record has incomplete agent profile identity")
+    cohort = record.get("cohort")
+    if not isinstance(cohort, dict) or not cohort.get("cohort_fingerprint"):
+        raise ValueError(f"{path}: run record has incomplete cohort identity")
+    if schema_version == RUN_RECORD_SCHEMA_VERSION and cohort.get(
+        "cohort_schema_version"
+    ) != 2:
+        raise ValueError(f"{path}: run record needs cohort_schema_version 2")
     harness = record.get("harness")
     required_harness = {
-        "benchmark_fingerprint",
         "sandbox_image_id",
         "sandbox_source_fingerprint",
     }
     if not isinstance(harness, dict) or not required_harness.issubset(harness):
         raise ValueError(f"{path}: run record has incomplete harness identity")
+    if schema_version == RUN_RECORD_SCHEMA_VERSION and not {
+        "execution_protocol_fingerprint",
+        "sandbox_runtime_fingerprint",
+    }.issubset(harness):
+        raise ValueError(f"{path}: run record has incomplete execution identity")
+    usage_record = record.get("usage")
+    if (
+        not isinstance(usage_record, dict)
+        or not isinstance(usage_record.get("total"), dict)
+        or usage_record.get("cost_coverage") not in {"complete", "partial", "unavailable"}
+    ):
+        raise ValueError(f"{path}: run record has incomplete usage accounting")
 
 
 def agent_configuration(record: dict[str, Any]) -> dict[str, Any]:
-    value = record.get("agent_configuration")
+    value = record.get("agent_profile")
     if not isinstance(value, dict) or not value.get("profile"):
-        raise ValueError("run record is missing agent_configuration.profile")
+        raise ValueError("run record is missing agent_profile.profile")
     return value
 
 
 def comparison_profile(record: dict[str, Any]) -> str:
-    model = record.get("model_configuration", {}).get("profile")
-    if not isinstance(model, str) or not model:
-        return ""
-    agent = agent_configuration(record).get("profile")
-    if not isinstance(agent, str) or not agent or agent == "vanilla":
-        return model
-    return f"{model} + {agent}"
+    value = agent_configuration(record).get("profile")
+    return value if isinstance(value, str) else ""
 
 
-def usage(record: dict[str, Any]) -> dict[str, int | float | None]:
-    raw_usage = record.get("usage", {})
-    values = list(raw_usage.values()) if isinstance(raw_usage, dict) else []
-    agent = record.get("agent", {})
-    provider_input = optional_int_sum(item.get("input_tokens") for item in values)
-    provider_cached = optional_int_sum(
-        item.get("input_tokens_cache_read") for item in values
-    )
-    provider_output = optional_int_sum(item.get("output_tokens") for item in values)
+def usage(record: dict[str, Any]) -> dict[str, int | float | str | None]:
+    raw = record.get("usage", {})
+    total = raw.get("total", {}) if isinstance(raw, dict) else {}
     return {
-        "input_tokens": (
-            provider_input
-            if provider_input is not None
-            else optional_int(agent.get("input_tokens"))
-        ),
-        "cache_write_tokens": optional_int_sum(
-            item.get("input_tokens_cache_write") for item in values
-        ),
-        "cached_input_tokens": (
-            provider_cached
-            if provider_cached is not None
-            else optional_int(agent.get("cached_input_tokens"))
-        ),
-        "reasoning_tokens": optional_int_sum(
-            item.get("reasoning_tokens") for item in values
-        ),
-        "output_tokens": (
-            provider_output
-            if provider_output is not None
-            else optional_int(agent.get("output_tokens"))
-        ),
-        "total_cost": optional_sum(item.get("total_cost") for item in values),
+        "input_tokens": optional_number(total.get("input_tokens")),
+        "cached_input_tokens": optional_number(total.get("cached_input_tokens")),
+        "reasoning_tokens": optional_number(total.get("reasoning_tokens")),
+        "output_tokens": optional_number(total.get("output_tokens")),
+        "model_seconds": optional_number(total.get("model_seconds")),
+        "total_cost": optional_number(total.get("reported_cost")),
+        "cost_coverage": raw.get("cost_coverage"),
     }
 
 
@@ -106,21 +111,5 @@ def number(value: Any) -> float:
     return 0.0
 
 
-def optional_int_sum(values) -> int | None:
-    numbers = [
-        int(value)
-        for value in values
-        if isinstance(value, (int, float)) and not isinstance(value, bool)
-    ]
-    return sum(numbers) if numbers else None
-
-
-def optional_int(value: Any) -> int | None:
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return int(value)
-    return None
-
-
-def optional_sum(values) -> float | None:
-    numbers = [number(value) for value in values if value is not None]
-    return sum(numbers) if numbers else None
+def optional_number(value: Any) -> int | float | None:
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None

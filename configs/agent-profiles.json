@@ -1,19 +1,36 @@
 {
+  "$schema": "schemas/agent-profiles.schema.json",
   "version": 1,
   "profiles": {
-    "vanilla": {
-      "description": "Clean Pi with fixed tools and no personal or project extras.",
-      "trust_mode": "no-approve",
-      "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
-      "runtime_env": {},
-      "settings": {},
-      "context_files": [],
-      "system_prompt": null,
-      "append_system_prompts": [],
-      "skills": [],
-      "extensions": [],
-      "prompt_templates": [],
-      "mcp_servers": []
+    "local-candidate-agent": {
+      "description": "Vanilla Pi using the local candidate resource.",
+      "pi_profile": "vanilla",
+      "model_resources": ["local-candidate"],
+      "default_model_resource": "local-candidate"
+    },
+    "hosted-quality-agent": {
+      "description": "Vanilla Pi using the hosted quality resource.",
+      "pi_profile": "vanilla",
+      "model_resources": ["hosted-quality"],
+      "default_model_resource": "hosted-quality"
+    },
+    "hosted-cost-agent": {
+      "description": "Vanilla Pi using the hosted cost resource.",
+      "pi_profile": "vanilla",
+      "model_resources": ["hosted-cost"],
+      "default_model_resource": "hosted-cost"
+    },
+    "codex-sol-agent": {
+      "description": "Vanilla Pi using the Codex subscription quality resource.",
+      "pi_profile": "vanilla",
+      "model_resources": ["openai-codex-gpt-5.6-sol"],
+      "default_model_resource": "openai-codex-gpt-5.6-sol"
+    },
+    "codex-luna-agent": {
+      "description": "Vanilla Pi using the second Codex subscription resource.",
+      "pi_profile": "vanilla",
+      "model_resources": ["openai-codex-gpt-5.6-luna"],
+      "default_model_resource": "openai-codex-gpt-5.6-luna"
     }
   }
 }

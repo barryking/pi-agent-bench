@@ -1,12 +1,15 @@
+import csv
 import json
-import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from inspect_ai.scorer import Score
 
+from pi_agent_bench.agent_profiles import AgentProfile
 from pi_agent_bench.model_profiles import ModelProfile
+from pi_agent_bench.pi_profiles import vanilla_pi_profile
+from pi_agent_bench.reporting import write_visualizer_exports
+from pi_agent_bench.result_records import validate_record
 from pi_agent_bench.run_records import export_inspect_logs, write_run_records
 from pi_agent_bench.versions import (
     FRAMEWORK_VERSION,
@@ -23,366 +26,354 @@ HARNESS_IDENTITY = {
     "repository_commit": "test-commit",
     "repository_branch": "test-branch",
     "repository_dirty": False,
-    "benchmark_fingerprint": "test-benchmark",
+    "harness_source_fingerprint": "test-harness",
     "sandbox_image": SANDBOX_IMAGE,
     "sandbox_image_id": "sha256:test-image",
     "sandbox_repo_digests": [],
-    "sandbox_source_fingerprint": "test-sandbox-source",
+    "sandbox_source_fingerprint": "test-sandbox",
+}
+COHORT_IDENTITY = {
+    "cohort_fingerprint": "test-cohort",
+    "dataset_version": "test-1",
+}
+CURRENT_HARNESS_IDENTITY = {
+    **HARNESS_IDENTITY,
+    "execution_protocol_fingerprint": "test-execution",
+    "sandbox_runtime_fingerprint": "test-runtime",
+}
+CURRENT_COHORT_IDENTITY = {
+    "cohort_schema_version": 2,
+    "cohort_fingerprint": "test-cohort-v2",
+    "dataset_version": "test-1",
 }
 
 
-def test_pins_match_package_and_sandbox_contract():
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    dockerfile = (ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
-    compose = (ROOT / "docker" / "compose.yaml").read_text(encoding="utf-8")
-
-    assert pyproject["project"]["version"] == FRAMEWORK_VERSION
-    assert f"inspect-ai=={INSPECT_VERSION}" in pyproject["project"]["dependencies"]
-    assert "ARG PI_VERSION" in dockerfile
-    assert 'dev.pi.version="${PI_VERSION}"' in dockerfile
-    assert 'org.opencontainers.image.version="${FRAMEWORK_VERSION}"' in dockerfile
-    assert "ARG BENCHMARK_SOURCE_FINGERPRINT=unknown" in dockerfile
-    assert 'dev.pi.benchmark-source="${BENCHMARK_SOURCE_FINGERPRINT}"' in dockerfile
-    assert SANDBOX_IMAGE in compose
-
-
-def test_result_record_contains_actual_harness_and_model_versions(tmp_path):
-    score = Score(
-        value=1.0,
-        metadata={
-            "pi_version": PI_VERSION,
-            "pi": {"turns": 2, "input_tokens": 10, "output_tokens": 3},
+def agent_profile(*, kind="local"):
+    resource = ModelProfile.from_dict(
+        "resource",
+        {
+            "kind": kind,
+            "model": "openai/resource",
+            "execution": {
+                "mode": "inspect-bridge",
+                "model_args": {},
+                "model_args_env": {},
+                "generate_config": {},
+            },
+            "capabilities": {
+                "context_tokens": 32768,
+                "max_output_tokens": 8192,
+                "reasoning": False,
+                "input": ["text"],
+            },
+            "configuration": {"revision": "one"},
         },
     )
+    return AgentProfile(
+        name="test-agent",
+        description="Test.",
+        pi_profile=vanilla_pi_profile(),
+        model_resources=(resource,),
+        default_model_resource="resource",
+    )
+
+
+def hybrid_agent_profile():
+    bridged = agent_profile(kind="hosted").model_resources[0]
+    direct = ModelProfile.from_dict(
+        "review",
+        {
+            "kind": "hosted",
+            "model": "openai-codex/review",
+            "execution": {
+                "mode": "pi-direct",
+                "provider": "openai-codex",
+                "model": "review",
+                "auth_file_env": "PI_AUTH_FILE",
+            },
+            "capabilities": {
+                "context_tokens": 32768,
+                "max_output_tokens": 8192,
+                "reasoning": True,
+                "input": ["text"],
+            },
+            "configuration": {"revision": "review"},
+        },
+    )
+    return AgentProfile(
+        name="hybrid-agent",
+        description="Hybrid.",
+        pi_profile=vanilla_pi_profile(),
+        model_resources=(bridged, direct),
+        default_model_resource="resource",
+    )
+
+
+def score(*, quality=1.0, metadata=None):
+    return SimpleNamespace(
+        value={"quality": quality, "success": float(quality >= 0.75)},
+        explanation="checked",
+        metadata={
+            "success_threshold": 0.75,
+            "required_components": [],
+            "scoring_method": "deterministic",
+            "pi_version": PI_VERSION,
+            "pi": {"turns": 2},
+            **(metadata or {}),
+        },
+    )
+
+
+def log(*, model_usage=None, status="success", sample_error=None, score_value=None):
     sample = SimpleNamespace(
         id="case-1",
         epoch=1,
-        scores={"quality": score},
+        error=sample_error,
+        scores={"outcome": score_value or score()},
         metadata={},
-        started_at="2026-07-25T00:00:00Z",
-        total_time=1.5,
-        model_usage={},
-        turn_count=2,
-        error=None,
-        events=[
-            SimpleNamespace(
-                event="model",
-                role=None,
-                working_time=2.0,
-                output=SimpleNamespace(
-                    usage=SimpleNamespace(output_tokens=8),
-                ),
-            ),
-            SimpleNamespace(event="tool", working_time=0.5),
-        ],
-        working_time=3.0,
-    )
-    log = SimpleNamespace(
-        eval=SimpleNamespace(
-            run_id="run-1",
-            task_version="dataset-1",
-            model="openai/exact-model",
-        ),
-        samples=[sample],
-        location="/tmp/run.eval",
-    )
-    profile = ModelProfile(
-        name="dgx",
-        kind="local",
-        model="openai/exact-model",
-        runtime_env={},
-        configuration={
-            "weights": "model@revision",
-            "runtime": "vllm",
-            "runtime_version": "26.05.post1",
-        },
-    )
-
-    [record_path] = write_run_records(
-        [log],
-        tmp_path,
-        profile,
-        run_name="nightly",
-        cache_state="warm",
-        harness_identity=HARNESS_IDENTITY,
-    )
-    record = json.loads(record_path.read_text(encoding="utf-8"))
-
-    assert record["inspect_model"] == "openai/exact-model"
-    assert record["model_configuration"]["configuration"]["weights"] == "model@revision"
-    assert record["harness"]["pi_version_actual"] == PI_VERSION
-    assert record["harness"]["inspect_version"] == INSPECT_VERSION
-    assert record["run_name"] == "nightly"
-    assert record["cache_state"] == "warm"
-    assert record["harness"]["benchmark_fingerprint"]
-    assert record["harness"]["repository_commit"] == "test-commit"
-    assert record["harness"]["sandbox_image_id"] == "sha256:test-image"
-    assert record["model_configuration"]["configuration_fingerprint"]
-    assert record["agent_configuration"]["profile"] == "vanilla"
-    assert record["agent_configuration"]["configuration_fingerprint"]
-    assert record["timing"]["inspect_working_seconds"] == 3.0
-    assert record["timing"]["model_working_seconds"] == 2.0
-    assert record["timing"]["tool_working_seconds"] == 0.5
-    assert record["timing"]["observed_output_tokens_per_model_second"] == 4.0
-
-
-def test_export_uses_historical_identity_from_the_inspect_log(tmp_path, monkeypatch):
-    score = Score(value=1.0, metadata={"success_threshold": 1.0})
-    sample = SimpleNamespace(
-        id="historical-case",
-        epoch=1,
-        scores={"quality": score},
-        metadata={},
-        started_at="2026-07-20T00:00:00Z",
-        total_time=1.0,
-        model_usage={},
-        turn_count=1,
-        error=None,
+        started_at="2026-01-01T00:00:00Z",
+        total_time=12.0,
+        working_time=10.0,
+        model_usage=model_usage or {},
         events=[],
-        working_time=0.8,
+        turn_count=2,
     )
-    profile = ModelProfile(
-        name="historical-model",
-        kind="hosted",
-        model="openai/historical",
-        runtime_env={},
-        configuration={},
-    )
-    historical = {
-        **HARNESS_IDENTITY,
-        "repository_commit": "commit-from-original-run",
-        "benchmark_fingerprint": "fingerprint-from-original-run",
-        "sandbox_image_id": "sha256:image-from-original-run",
-    }
-    log = SimpleNamespace(
-        status="success",
-        eval=SimpleNamespace(
-            run_id="historical-run",
-            task_version="dataset-1",
-            model="openai/historical",
-            metadata={
-                "pi_agent_bench": {
-                    "profile": profile.public_identity(),
-                    "agent_profile": {
-                        "profile": "vanilla",
-                        "configuration": {},
-                        "configuration_fingerprint": "vanilla",
-                    },
-                    "run_name": "historical-baseline",
-                    "cache_state": "cold",
-                    "harness": historical,
-                }
-            },
-        ),
+    return SimpleNamespace(
+        status=status,
+        error=None,
+        location="test-fixtures/test.eval",
+        eval=SimpleNamespace(run_id="run-1", task_version="test-1", model="mockllm/model"),
         samples=[sample],
-        location="/logs/historical.eval",
     )
-    monkeypatch.setattr(
-        "inspect_ai.log.list_eval_logs",
-        lambda _logs_dir: [SimpleNamespace(name="/logs/historical.eval")],
-    )
-    monkeypatch.setattr("inspect_ai.log.read_eval_log", lambda _name: log)
 
-    [path] = export_inspect_logs(tmp_path / "logs", tmp_path / "results")
+
+def test_pins_match_package_and_sandbox_contract():
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    dockerfile = (ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
+    assert f'inspect-ai=={INSPECT_VERSION}' in pyproject
+    assert f"pi-agent-bench-sandbox:{FRAMEWORK_VERSION}" == SANDBOX_IMAGE
+    assert "ARG PI_VERSION" in dockerfile
+
+
+def test_result_record_contains_composed_profile_cohort_and_path_usage(tmp_path):
+    paths = write_run_records(
+        [log(model_usage={"openai/resource": {
+            "input_tokens": 10,
+            "input_tokens_cache_read": 2,
+            "output_tokens": 3,
+            "reasoning_tokens": 1,
+            "total_cost": None,
+        }})],
+        tmp_path,
+        agent_profile(),
+        run_name="test",
+        harness_identity=HARNESS_IDENTITY,
+        cohort_identity=COHORT_IDENTITY,
+    )
+    record = json.loads(paths[0].read_text(encoding="utf-8"))
+
+    assert record["schema_version"] == 5
+    assert record["agent_profile"]["profile"] == "test-agent"
+    assert record["cohort"]["cohort_fingerprint"] == "test-cohort"
+    assert record["harness"]["harness_source_fingerprint"] == "test-harness"
+    assert record["usage"]["bridged"]["input_tokens"] == 10
+    assert record["usage"]["direct"]["call_count"] == 0
+    assert record["usage"]["total"]["input_tokens"] == 10
+    assert record["usage"]["cost_coverage"] == "complete"
+
+
+def test_current_record_schema_requires_campaign_and_cohort_v2(tmp_path):
+    [path] = write_run_records(
+        [log()],
+        tmp_path,
+        agent_profile(),
+        benchmark_id="campaign-1",
+        run_name="test",
+        harness_identity=CURRENT_HARNESS_IDENTITY,
+        cohort_identity=CURRENT_COHORT_IDENTITY,
+    )
     record = json.loads(path.read_text(encoding="utf-8"))
 
-    assert record["run_name"] == "historical-baseline"
-    assert record["harness"]["repository_commit"] == "commit-from-original-run"
-    assert record["harness"]["benchmark_fingerprint"] == "fingerprint-from-original-run"
-    assert record["harness"]["sandbox_image_id"] == "sha256:image-from-original-run"
+    assert record["schema_version"] == 6
+    assert record["benchmark_id"] == "campaign-1"
+    validate_record(record, path)
+    runs_path, _metrics_path = write_visualizer_exports(tmp_path)
+    [run] = list(csv.DictReader(runs_path.open()))
+    assert run["execution_protocol_fingerprint"] == "test-execution"
+    assert run["harness_source_fingerprint"] == "test-harness"
 
 
-def test_result_record_uses_explicit_success_threshold(tmp_path):
-    score = Score(
-        value=0.8,
-        metadata={
-            "success_threshold": 0.75,
-            "scoring_method": "deterministic-executable-verifier",
-        },
-    )
-    sample = SimpleNamespace(
-        id="case-1",
-        epoch=1,
-        scores={"quality": score},
-        metadata={},
-        started_at="2026-07-25T00:00:00Z",
-        total_time=1.5,
-        model_usage={},
-        turn_count=2,
-        error=None,
-    )
-    log = SimpleNamespace(
-        eval=SimpleNamespace(
-            run_id="run-threshold",
-            task_version="dataset-1",
-            model="openai/evaluated-model",
-        ),
-        samples=[sample],
-        location="/tmp/run.eval",
-    )
-    profile = ModelProfile(
-        name="local-candidate",
-        kind="local",
-        model="openai/evaluated-model",
-        runtime_env={},
-        configuration={},
-    )
-
-    [record_path] = write_run_records(
-        [log],
+def test_log_export_prunes_valid_records_absent_from_canonical_logs(
+    tmp_path,
+    monkeypatch,
+):
+    [stale] = write_run_records(
+        [log()],
         tmp_path,
-        profile,
-        run_name="default",
+        agent_profile(),
+        run_name="stale",
         harness_identity=HARNESS_IDENTITY,
+        cohort_identity=COHORT_IDENTITY,
     )
-    record = json.loads(record_path.read_text(encoding="utf-8"))
+    monkeypatch.setattr("inspect_ai.log.list_eval_logs", lambda _path: [])
 
-    assert record["success"] is True
-    assert record["score"]["success_threshold"] == 0.75
-    assert record["score"]["method"] == "deterministic-executable-verifier"
+    assert export_inspect_logs(tmp_path / "logs", tmp_path) == []
+    assert not stale.exists()
 
 
-def test_result_record_can_be_rebuilt_from_profile_identity(tmp_path):
-    score = Score(value=1.0, metadata={"success_threshold": 1.0})
-    sample = SimpleNamespace(
-        id="case-from-log",
-        epoch=1,
-        scores={"quality": score},
-        metadata={},
-        started_at="2026-07-25T00:00:00Z",
-        total_time=1.0,
-        model_usage={},
-        turn_count=1,
-        error=None,
-        events=[],
-        working_time=0.8,
+def test_log_export_preserves_previous_record_when_source_log_is_skipped(
+    tmp_path,
+    monkeypatch,
+):
+    source = log()
+    [record] = write_run_records(
+        [source],
+        tmp_path,
+        agent_profile(),
+        run_name="previous",
+        harness_identity=HARNESS_IDENTITY,
+        cohort_identity=COHORT_IDENTITY,
     )
-    log = SimpleNamespace(
-        status="success",
-        eval=SimpleNamespace(
-            run_id="run-from-log",
-            task_version="dataset-1",
-            model="openai/exact-model",
-        ),
-        samples=[sample],
-        location="/tmp/run.eval",
+    source.eval.metadata = {}
+    monkeypatch.setattr(
+        "inspect_ai.log.list_eval_logs",
+        lambda _path: [SimpleNamespace(name=source.location)],
     )
-    identity = {
-        "profile": "local",
-        "kind": "local",
-        "model": "openai/exact-model",
-        "configuration": {"runtime": "vllm"},
-        "configuration_fingerprint": "local-vllm",
+    monkeypatch.setattr("inspect_ai.log.read_eval_log", lambda _name: source)
+
+    with pytest.warns(UserWarning, match="without Pi Agent Bench metadata"):
+        assert export_inspect_logs(tmp_path / "logs", tmp_path) == []
+
+    assert record.exists()
+
+
+def test_hosted_missing_cost_is_unavailable_not_zero(tmp_path):
+    paths = write_run_records(
+        [log(model_usage={"openai/resource": {
+            "input_tokens": 10,
+            "input_tokens_cache_read": 0,
+            "output_tokens": 3,
+            "reasoning_tokens": 0,
+            "total_cost": None,
+        }})],
+        tmp_path,
+        agent_profile(kind="hosted"),
+        run_name="test",
+        harness_identity=HARNESS_IDENTITY,
+        cohort_identity=COHORT_IDENTITY,
+    )
+    usage = json.loads(paths[0].read_text(encoding="utf-8"))["usage"]
+    assert usage["bridged"]["reported_cost"] is None
+    assert usage["total"]["reported_cost"] is None
+    assert usage["cost_coverage"] == "unavailable"
+
+
+def test_partial_cost_keeps_only_the_reported_lower_bound(tmp_path):
+    metadata = {
+        "pi_direct_usage": {
+            "call_count": 1,
+            "input_tokens": 20,
+            "cached_input_tokens": 2,
+            "output_tokens": 4,
+            "reasoning_tokens": 1,
+            "model_seconds": 0.5,
+            "reported_cost": 0,
+        },
+        "pi_direct_cost_reported_calls": 0,
+        "pi_observed_models": [
+            {"provider": "openai-codex", "model": "review", "call_count": 1}
+        ],
+        "pi_unattributed_assistant_calls": 0,
     }
-
-    [record_path] = write_run_records(
-        [log],
+    [path] = write_run_records(
+        [
+            log(
+                model_usage={
+                    "openai/resource": {
+                        "input_tokens": 10,
+                        "input_tokens_cache_read": 1,
+                        "output_tokens": 3,
+                        "reasoning_tokens": 0,
+                        "total_cost": 0.02,
+                    }
+                },
+                score_value=score(metadata=metadata),
+            )
+        ],
         tmp_path,
-        identity,
-        run_name="default",
+        hybrid_agent_profile(),
+        run_name="test",
         harness_identity=HARNESS_IDENTITY,
+        cohort_identity=COHORT_IDENTITY,
     )
-    record = json.loads(record_path.read_text(encoding="utf-8"))
 
-    assert record["model_configuration"] == identity
+    usage = json.loads(path.read_text(encoding="utf-8"))["usage"]
+    assert usage["direct"]["reported_cost"] is None
+    assert usage["total"]["reported_cost"] == pytest.approx(0.02)
+    assert usage["cost_coverage"] == "partial"
 
 
-def test_result_record_extracts_structured_inspect_score(tmp_path):
-    score = Score(
-        value={
-            "quality": 0.8,
-            "success": 1.0,
-            "component.tests": 1.0,
-            "component.docs": 0.5,
+def test_hybrid_usage_merges_sources_without_counting_bridge_pi_events(tmp_path):
+    metadata = {
+        "pi_direct_usage": {
+            "call_count": 1,
+            "input_tokens": 20,
+            "cached_input_tokens": 2,
+            "output_tokens": 4,
+            "reasoning_tokens": 1,
+            "model_seconds": 0.5,
+            "reported_cost": 0.03,
         },
-        metadata={
-            "success_threshold": 0.75,
-            "components": {"verifier_metadata": 1.0},
-        },
-    )
-    sample = SimpleNamespace(
-        id="case-structured",
-        epoch=1,
-        scores={"outcome_verifier_scorer": score},
-        metadata={},
-        started_at="2026-07-25T00:00:00Z",
-        total_time=1.5,
-        model_usage={},
-        turn_count=2,
-        error=None,
-    )
-    log = SimpleNamespace(
-        status="success",
-        eval=SimpleNamespace(
-            run_id="run-structured",
-            task_version="dataset-1",
-            model="openai/evaluated-model",
-        ),
-        samples=[sample],
-        location="/tmp/run.eval",
-    )
-    profile = ModelProfile(
-        name="local-candidate",
-        kind="local",
-        model="openai/evaluated-model",
-        runtime_env={},
-        configuration={},
-    )
-
-    [record_path] = write_run_records(
-        [log],
-        tmp_path,
-        profile,
-        run_name="default",
-        harness_identity=HARNESS_IDENTITY,
-    )
-    record = json.loads(record_path.read_text(encoding="utf-8"))
-
-    assert record["validity"]["valid"] is True
-    assert record["score"]["value"] == 0.8
-    assert record["success"] is True
-    assert record["score"]["components"] == {
-        "docs": 0.5,
-        "verifier_metadata": 1.0,
-        "tests": 1.0,
+        "pi_direct_cost_reported_calls": 1,
+        "pi_observed_models": [
+            {
+                "provider": "openai-codex",
+                "model": "review",
+                "call_count": 1,
+            }
+        ],
+        "pi_unattributed_assistant_calls": 0,
     }
-    assert (
-        record["inspect_scores"]["outcome_verifier_scorer"]["value"]["quality"]
-        == 0.8
+    paths = write_run_records(
+        [
+            log(
+                model_usage={
+                    "openai/resource": {
+                        "input_tokens": 10,
+                        "input_tokens_cache_read": 1,
+                        "output_tokens": 3,
+                        "reasoning_tokens": 0,
+                        "total_cost": 0.02,
+                    }
+                },
+                score_value=score(metadata=metadata),
+            )
+        ],
+        tmp_path,
+        hybrid_agent_profile(),
+        run_name="test",
+        harness_identity=HARNESS_IDENTITY,
+        cohort_identity=COHORT_IDENTITY,
     )
+    usage = json.loads(paths[0].read_text(encoding="utf-8"))["usage"]
+    assert usage["bridged"]["input_tokens"] == 10
+    assert usage["direct"]["input_tokens"] == 20
+    assert usage["total"]["input_tokens"] == 30
+    assert usage["total"]["reported_cost"] == pytest.approx(0.05)
+    assert usage["cost_coverage"] == "complete"
 
 
-def test_incomplete_log_is_recorded_but_excluded_from_rankings(tmp_path):
-    log = SimpleNamespace(
-        status="cancelled",
-        error=SimpleNamespace(message="interrupted"),
-        eval=SimpleNamespace(
-            run_id="run-cancelled",
-            task_version="dataset-1",
-            model="openai/evaluated-model",
-        ),
-        samples=[],
-        location="/tmp/cancelled.eval",
-    )
-    profile = ModelProfile(
-        name="local-candidate",
-        kind="local",
-        model="openai/evaluated-model",
-        runtime_env={},
-        configuration={},
-    )
-
+def test_incomplete_log_is_recorded_but_excluded(tmp_path):
     with pytest.warns(UserWarning, match="excluded incomplete"):
         paths = write_run_records(
-            [log],
+            [log(status="error")],
             tmp_path,
-            profile,
-            run_name="default",
+            agent_profile(),
+            run_name="test",
             harness_identity=HARNESS_IDENTITY,
+            cohort_identity=COHORT_IDENTITY,
         )
-
     assert paths == []
-    [invalid_path] = list((tmp_path / "_invalid").glob("*.invalid.json"))
-    invalid = json.loads(invalid_path.read_text(encoding="utf-8"))
-    assert invalid["validity"]["valid"] is False
-    assert list(tmp_path.glob("*.json")) == []
+    invalid = list((tmp_path / "_invalid").glob("*.invalid.json"))
+    assert len(invalid) == 1
+    assert json.loads(invalid[0].read_text())["validity"]["valid"] is False

@@ -40,6 +40,9 @@
       const usable = state.summaries.filter(item => item.quality !== null && item.wallAll !== null);
       if (!usable.length) return drawEmpty(chart, "Quality and duration data are required.");
       const maxWall = Math.max(...usable.map(item => item.wallAll));
+      const maxCost = Math.max(...usable
+        .filter(item => item.costCoverage !== "unavailable")
+        .map(item => item.cost || 0), 0);
       const scale = axes(
         chart.ctx, chart.width, chart.height,
         { minX: 0, maxX: maxWall * 1.12 || 1, minY: 0, maxY: 1 },
@@ -47,18 +50,41 @@
         value => `${formatNumber(value * 100)}%`
       );
       state.points.pareto = usable.map((item, index) => {
-        const point = { x: scale.x(item.wallAll), y: scale.y(item.quality), item };
-        chart.ctx.fillStyle = palette[index % palette.length];
-        chart.ctx.beginPath(); chart.ctx.arc(point.x, point.y, 6, 0, Math.PI * 2); chart.ctx.fill();
+        const radius = item.costCoverage === "unavailable"
+          ? 8
+          : Math.max(5, maxCost ? Math.sqrt((item.cost || 0) / maxCost) * 22 : 5);
+        const point = {
+          x: scale.x(item.wallAll),
+          y: scale.y(item.quality),
+          r: radius,
+          item
+        };
+        const color = palette[index % palette.length];
+        chart.ctx.setLineDash(item.costCoverage === "partial" ? [4, 3] : []);
+        chart.ctx.lineWidth = 2;
+        chart.ctx.strokeStyle = color;
+        chart.ctx.fillStyle = item.costCoverage === "unavailable" ? "transparent" : `${color}99`;
+        chart.ctx.beginPath(); chart.ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        chart.ctx.fill(); chart.ctx.stroke();
+        chart.ctx.setLineDash([]);
         chart.ctx.fillStyle = colors().text;
         chart.ctx.textAlign = "left";
         chart.ctx.font = "12px system-ui";
-        chart.ctx.fillText(item.profile, point.x + 9, point.y + 4);
+        chart.ctx.fillText(item.profile, point.x + radius + 5, point.y + 4);
         return point;
       });
-      $("pareto-legend").innerHTML = `<span class="legend-item">Quality is balanced across cases. Time is the median full task time for all attempts. Cost is not used.</span>`;
+      $("pareto-legend").innerHTML = `
+        <span class="legend-item"><span class="bubble-key bubble-small"></span>lower reported cost</span>
+        <span class="legend-item"><span class="bubble-key bubble-large"></span>higher reported cost</span>
+        <span class="legend-item"><span class="bubble-key bubble-partial"></span>partial cost</span>
+        <span class="legend-item"><span class="bubble-key bubble-unavailable"></span>cost unavailable</span>
+        <span class="legend-item">A point directly above another has better quality at roughly the same time. A similarly positioned but smaller bubble achieves the same outcome at lower cost.</span>`;
       bindTooltip("pareto", "pareto-tip", point =>
-        `<strong>${escapeHtml(point.item.profile)}</strong>${formatMetric(point.item.quality, "ratio")} quality · ${formatMetric(point.item.wallAll, "seconds")} · ${formatMetric(point.item.success, "ratio")} success`
+        `<strong>${escapeHtml(point.item.profile)}</strong>` +
+        `${formatMetric(point.item.quality, "ratio")} quality · ${formatMetric(point.item.wallAll, "seconds")} median wall time<br>` +
+        `${escapeHtml(formatMetric(point.item.cost, point.item.costUnit))} summed run cost · ${escapeHtml(point.item.costCoverage)} coverage<br>` +
+        `Configured: ${escapeHtml(point.item.modelResources)}; default: ${escapeHtml(point.item.defaultResource)}<br>` +
+        `Observed: ${escapeHtml(point.item.observedModels)}`
       );
     }
 
@@ -98,7 +124,7 @@
 
     function renderComparison() {
       const metric = $("metric").value;
-      $("comparison-title").textContent = label(metric);
+      $("comparison-title").textContent = `${label(metric)} across profiles`;
       const chart = setupCanvas("comparison");
       const groups = state.summaries.map(summary => {
         const rows = state.cohort.filter(row => row.profile === summary.profile && row.metric === metric);
@@ -150,20 +176,32 @@
       const profiles = unique(state.rawCohort.map(row => row.profile));
       const cases = unique(metricRows(state.rawCohort, "quality.score").map(row => row.case_id));
       $("coverage-head").innerHTML =
-        `<th>Setup</th>${cases.map(caseId => `<th>${escapeHtml(caseId)}</th>`).join("")}`;
-      $("coverage-body").innerHTML = profiles.map(profile => {
-        const rows = metricRows(
-          state.rawCohort.filter(row => row.profile === profile),
-          "quality.score"
-        );
-        return `<tr><td class="model">${escapeHtml(profile)}</td>${cases.map(caseId => {
-          const count = rows.filter(row => row.case_id === caseId).length;
-          return `<td class="number">${count || "—"}</td>`;
+        `<th>Benchmark case</th>${profiles.map(profile => `<th>${escapeHtml(profile)}</th>`).join("")}`;
+      const qualityRows = metricRows(state.rawCohort, "quality.score");
+      const counts = cases.flatMap(caseId => profiles.map(profile =>
+        qualityRows.filter(row => row.case_id === caseId && row.profile === profile).length
+      ));
+      const maxCount = counts.length ? Math.max(...counts) : 0;
+      const uniformCoverage = state.sameCoverage &&
+        counts.length > 0 &&
+        counts.every(count => count === counts[0] && count > 0);
+      $("coverage-body").innerHTML = cases.map(caseId => {
+        return `<tr><td class="model">${escapeHtml(caseId)}</td>${profiles.map(profile => {
+          const count = qualityRows.filter(
+            row => row.case_id === caseId && row.profile === profile
+          ).length;
+          const coverageClass = count === 0
+            ? " coverage-missing"
+            : (count < maxCount ? " coverage-uneven" : "");
+          return `<td class="number${coverageClass}">${count || "—"}</td>`;
         }).join("")}</tr>`;
       }).join("");
-      $("coverage-label").textContent = state.sameCoverage
-        ? "Identical case coverage across model-and-agent setups"
-        : `${state.commonCases.length} common cases; enable “Common cases only” for a matched comparison`;
+      $("coverage-label").textContent = uniformCoverage
+        ? `Complete · ${cases.length} cases · ${counts[0]} trials per profile`
+        : state.sameCoverage
+          ? `Uneven trials · ${cases.length} cases across ${profiles.length} profiles`
+          : `Incomplete · ${state.commonCases.length}/${cases.length} cases shared`;
+      if (!uniformCoverage) $("coverage-details").open = true;
     }
 
     function renderTrend() {
@@ -231,7 +269,7 @@
           <td class="number">${escapeHtml(String(row.trial_number ?? "—"))}</td>
           <td>${escapeHtml(label(row.metric))}</td>
           <td class="number">${escapeHtml(formatMetric(row.value, row.unit))}</td>
-          <td class="number">${escapeHtml((row.run_id || "—").slice(0, 10))}</td>
-          <td class="number">${escapeHtml(row.benchmark_fingerprint.slice(0, 12))}</td>
+          <td class="number">${escapeHtml((row.benchmark_id || row.run_id || "—").slice(0, 12))}</td>
+          <td class="number">${escapeHtml((row.cohort_fingerprint || "—").slice(0, 12))}</td>
         </tr>`).join("");
     }

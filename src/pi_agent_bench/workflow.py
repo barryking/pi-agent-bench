@@ -30,6 +30,10 @@ def initialize_workspace(
             REPOSITORY_ROOT / "configs" / "agent-profiles.json",
             destination / "configs" / "agent-profiles.local.json",
         ),
+        (
+            REPOSITORY_ROOT / "configs" / "pi-profiles.json",
+            destination / "configs" / "pi-profiles.local.json",
+        ),
     ]
     results: list[tuple[Path, str]] = []
     for source, target in files:

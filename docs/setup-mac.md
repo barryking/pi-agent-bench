@@ -14,7 +14,7 @@ Install Apple command-line tools:
 xcode-select --install
 ```
 
-Install Homebrew if you do not have it. Then run:
+Install Homebrew if you do not have it. Then install Python 3.11 or newer:
 
 ```bash
 brew install git python@3.11
@@ -77,7 +77,8 @@ pi-bench versions
 The setup script creates:
 
 - `.env.local`;
-- `configs/model-baselines.local.json`; and
+- `configs/model-baselines.local.json`;
+- `configs/pi-profiles.local.json`; and
 - `configs/agent-profiles.local.json`.
 
 Put secret keys and private addresses in `.env.local`.
@@ -105,22 +106,19 @@ Record:
 
 Never put a secret key in the JSON file.
 
-The agent profile file starts with only `vanilla`. You can add exact Pi
-instructions, tools, skills, extensions, or MCP support later. Read
+The Pi profile file starts with `vanilla`. The agent profile file composes Pi
+profiles with model resources. You can add exact instructions, tools, skills,
+extensions, MCP support, and multi-model profiles later. Read
 [Agent profiles](agent-profiles.md).
 
-## 5. Check one model
+## 5. Check one complete agent profile
 
 ```bash
-pi-bench doctor \
-  --model-profile local-candidate \
-  --model-profiles-file configs/model-baselines.local.json \
-  --agent-profile vanilla \
-  --env-file .env.local
+pi-bench doctor --agent-profile local-candidate-agent
 ```
 
-The command checks Docker, Git, config values, secrets, and local model
-connections. It also checks that the Docker image matches the verifier and
+The command checks Docker, Git, every referenced component, secrets, and local
+model connections. It also checks that the Docker image matches the verifier and
 Docker files in this clone. If that check fails, run `pi-bench build-sandbox`.
 
 Fix every message before running a benchmark.
@@ -130,9 +128,7 @@ Fix every message before running a benchmark.
 ```bash
 pi-bench run \
   --dataset evals/starter/cases.jsonl \
-  --model-profile hosted-quality \
-  --model-profiles-file configs/model-baselines.local.json \
-  --env-file .env.local \
+  --agent-profile hosted-quality-agent \
   --run-name first-check
 ```
 
@@ -181,10 +177,11 @@ The default `vanilla` profile runs with personal extras turned off:
 --no-extensions
 --no-prompt-templates
 --no-themes
---no-context-files
 ```
 
-This stops a personal skill or old session from changing the test.
+This stops a personal skill or old session from changing the test. Repository
+`AGENTS.md` and `CLAUDE.md` context remains enabled so every profile receives
+the task's checked-in project instructions.
 
 If you select another agent profile, only its named files are copied into this
 temporary home. Your normal Pi files still stay outside the container.
@@ -196,7 +193,7 @@ Logs and results stay on the Mac. Git ignores them.
 To remove only the reusable Docker image:
 
 ```bash
-docker image rm pi-agent-bench-sandbox:0.6.0
+docker image rm pi-agent-bench-sandbox:0.7.0
 ```
 
 Do this only when you mean to rebuild it.

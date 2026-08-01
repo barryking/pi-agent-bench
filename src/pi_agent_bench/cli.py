@@ -16,6 +16,7 @@ from .cli_commands import (
     _command_init,
     _command_model_profiles,
     _command_new_case,
+    _command_pi_profiles,
     _command_prove,
     _command_replay,
     _command_report,
@@ -26,7 +27,6 @@ from .cli_execution import (
     _benchmark,
     _doctor,
     _resolve_agent_profile,
-    _resolve_model_profile,
     _run,
 )
 from .cli_parser import build_parser
@@ -40,6 +40,7 @@ def main() -> None:
         "validate": _command_validate,
         "model-profiles": _command_model_profiles,
         "agent-profiles": _command_agent_profiles,
+        "pi-profiles": _command_pi_profiles,
         "versions": _command_versions,
         "build-sandbox": _command_build_sandbox,
         "doctor": _command_doctor,
@@ -55,14 +56,13 @@ def main() -> None:
 
 
 def _command_doctor(args: argparse.Namespace) -> None:
-    profile = _resolve_model_profile(args)
     agent_profile = _resolve_agent_profile(args)
-    failures = _doctor(profile, agent_profile)
+    failures = _doctor(agent_profile)
     if failures:
         raise SystemExit("\n".join(failures))
     print(
-        f"ready: model-profile={profile.name}; agent-profile={agent_profile.name}; "
-        f"model={profile.model}"
+        f"ready: agent-profile={agent_profile.name}; "
+        f"resources={','.join(resource.name for resource in agent_profile.model_resources)}"
     )
 
 

@@ -1,0 +1,19 @@
+{
+  "$schema": "schemas/pi-profiles.schema.json",
+  "version": 1,
+  "profiles": {
+    "vanilla": {
+      "description": "Clean Pi with fixed tools and no personal or project extras.",
+      "tools": ["read", "bash", "edit", "write", "grep", "find", "ls"],
+      "runtime_env": {},
+      "settings": {},
+      "context_files": [],
+      "system_prompt": null,
+      "append_system_prompts": [],
+      "skills": [],
+      "extensions": [],
+      "prompt_templates": [],
+      "mcp_servers": []
+    }
+  }
+}

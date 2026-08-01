@@ -1,17 +1,18 @@
-# Private starting repositories
+# Local external starting repositories
 
-Put a clean copy of each real coding project in this folder:
+Put clean checkouts of external or private coding projects in this folder:
 
 ```text
 local-repos/
   source-project-name/
 ```
 
-Git ignores everything here except this README. This helps stop a private or
-third-party project from being committed by mistake.
+Git ignores everything here except this README. `local-repos/` is a storage
+location, not a case type or dataset. It prevents private or third-party source
+from being committed accidentally.
 
-You do not need this folder for the owned starter suite. It uses the committed
-code under `starting-repos/`.
+The maintained starter suite does not use this folder. Its project-owned
+starting code is committed under `starting-repos/`.
 
 ## Add a repository
 
@@ -43,6 +44,7 @@ The last command prints the exact starting commit. Put it in the case:
 
 The validator stops if the repository is dirty or is on a different commit.
 Keep `draft` set to `true` until the verifier and case proof are complete.
+Merely checking out the declared commit does not change the dataset version.
 
 ## What happens during a run
 
@@ -56,4 +58,5 @@ You do not need to reset the repository after a run. The next try starts from
 the same clean commit.
 
 If you want a new starting point, check out a different commit. Then update
-`source_commit` and increase `dataset_version`.
+`source_commit`, rerun the case proof, and increase `dataset_version` because
+old and new results are not comparable.

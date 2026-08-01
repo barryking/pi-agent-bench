@@ -1,4 +1,4 @@
-    ["dataset", "run_name"].forEach(id => $(id).addEventListener("change", () => { refreshCohortControls(); render(); }));
+    ["dataset", "cohort", "run_name"].forEach(id => $(id).addEventListener("change", () => { refreshCohortControls(); render(); }));
     ["cache", "metric", "trend-case", "baseline", "common-only"].forEach(id => $(id).addEventListener("change", render));
     $("file").addEventListener("change", async event => {
       const file = event.target.files[0];

@@ -30,6 +30,9 @@ a choice is wrong, update the page as part of the same change.
 - Record the model, model version, server, agent profile, harness, Pi, and
   dataset versions.
 - Do not say a feature works until an automated test has checked it.
+- Keep new or materially changed cases as drafts until a maintainer proof shows
+  untouched failure and known-good success.
+- Trial proved candidates before accepting them into a maintained dataset.
 - Keep special provider behaviour in a small adapter.
 - Keep `docs/roadmap.md` honest when work is completed or added.
 

@@ -1,12 +1,26 @@
 {
+  "$schema": "schemas/model-profiles.schema.json",
   "version": 1,
   "profiles": {
     "local-candidate": {
       "kind": "local",
       "model": "openai/nvidia/Qwen3.6-35B-A3B-NVFP4",
-      "runtime_env": {
-        "OPENAI_BASE_URL": "LOCAL_MODEL_BASE_URL",
-        "OPENAI_API_KEY": "LOCAL_MODEL_API_KEY"
+      "execution": {
+        "mode": "inspect-bridge",
+        "model_args": {},
+        "model_args_env": {
+          "base_url": "LOCAL_MODEL_BASE_URL",
+          "api_key": "LOCAL_MODEL_API_KEY"
+        },
+        "generate_config": {
+          "temperature": 0
+        }
+      },
+      "capabilities": {
+        "context_tokens": 131072,
+        "max_output_tokens": 32768,
+        "reasoning": true,
+        "input": ["text"]
       },
       "configuration": {
         "weights": "nvidia/Qwen3.6-35B-A3B-NVFP4@replace-with-exact-revision",
@@ -14,70 +28,102 @@
         "runtime": "vllm",
         "runtime_version": "replace-with-installed-version",
         "attention_backend": "replace-with-measured-backend",
-        "context_tokens": 131072,
         "prefix_caching": true
       }
     },
     "hosted-quality": {
       "kind": "hosted",
       "model": "openai/replace-with-quality-control-model",
-      "runtime_env": {
-        "OPENAI_API_KEY": "HOSTED_QUALITY_API_KEY"
+      "execution": {
+        "mode": "inspect-bridge",
+        "model_args": {},
+        "model_args_env": {
+          "api_key": "HOSTED_QUALITY_API_KEY"
+        },
+        "generate_config": {
+          "reasoning_effort": "high"
+        }
+      },
+      "capabilities": {
+        "context_tokens": 131072,
+        "max_output_tokens": 32768,
+        "reasoning": true,
+        "input": ["text", "image"]
       },
       "configuration": {
         "provider": "replace-with-provider",
         "model_revision": "replace-with-version-or-snapshot",
-        "cost_currency": "USD",
         "role": "quality-control"
       }
     },
     "hosted-cost": {
       "kind": "hosted",
       "model": "openai/replace-with-cost-control-model",
-      "runtime_env": {
-        "OPENAI_API_KEY": "HOSTED_COST_API_KEY"
+      "execution": {
+        "mode": "inspect-bridge",
+        "model_args": {},
+        "model_args_env": {
+          "api_key": "HOSTED_COST_API_KEY"
+        },
+        "generate_config": {}
+      },
+      "capabilities": {
+        "context_tokens": 131072,
+        "max_output_tokens": 32768,
+        "reasoning": false,
+        "input": ["text"]
       },
       "configuration": {
         "provider": "replace-with-provider",
         "model_revision": "replace-with-version-or-snapshot",
-        "cost_currency": "USD",
         "role": "price-performance-control"
       }
     },
     "openai-codex-gpt-5.6-sol": {
       "kind": "hosted",
       "model": "openai-codex/gpt-5.6-sol",
-      "runtime_env": {},
-      "pi_direct": {
+      "execution": {
+        "mode": "pi-direct",
         "provider": "openai-codex",
         "model": "gpt-5.6-sol",
-        "auth_file_env": "PI_AUTH_FILE"
+        "auth_file_env": "PI_AUTH_FILE",
+        "thinking_level": "high"
+      },
+      "capabilities": {
+        "context_tokens": 278528,
+        "max_output_tokens": 131072,
+        "reasoning": true,
+        "input": ["text", "image"]
       },
       "configuration": {
         "provider": "openai-codex",
         "billing": "ChatGPT subscription",
         "authentication": "Pi OAuth",
         "model_revision": "gpt-5.6-sol",
-        "thinking_level": "high",
         "role": "quality-control"
       }
     },
     "openai-codex-gpt-5.6-luna": {
       "kind": "hosted",
       "model": "openai-codex/gpt-5.6-luna",
-      "runtime_env": {},
-      "pi_direct": {
+      "execution": {
+        "mode": "pi-direct",
         "provider": "openai-codex",
         "model": "gpt-5.6-luna",
-        "auth_file_env": "PI_AUTH_FILE"
+        "auth_file_env": "PI_AUTH_FILE",
+        "thinking_level": "high"
+      },
+      "capabilities": {
+        "context_tokens": 131072,
+        "max_output_tokens": 32768,
+        "reasoning": true,
+        "input": ["text", "image"]
       },
       "configuration": {
         "provider": "openai-codex",
         "billing": "ChatGPT subscription",
         "authentication": "Pi OAuth",
         "model_revision": "gpt-5.6-luna",
-        "context_tokens_evaluated": 65536,
-        "thinking_level": "high",
         "role": "second-cloud-control"
       }
     }

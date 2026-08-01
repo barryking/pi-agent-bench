@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/barryking/pi-agent-bench/configs/schemas/model-profiles.schema.json",
+  "title": "Pi Agent Bench model resources",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "profiles"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "version": {"const": 1},
+    "profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^[a-z0-9][a-z0-9._-]*$"},
+      "additionalProperties": {"$ref": "#/$defs/profile"}
+    }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "model", "execution", "capabilities", "configuration"],
+      "properties": {
+        "kind": {"enum": ["local", "hosted"]},
+        "model": {"type": "string", "minLength": 1},
+        "execution": {
+          "oneOf": [
+            {"$ref": "#/$defs/bridgeExecution"},
+            {"$ref": "#/$defs/directExecution"}
+          ]
+        },
+        "capabilities": {"$ref": "#/$defs/capabilities"},
+        "configuration": {
+          "allOf": [{"type": "object"}, {"$ref": "#/$defs/publicJson"}]
+        }
+      }
+    },
+    "bridgeExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "model_args", "model_args_env", "generate_config"],
+      "properties": {
+        "mode": {"const": "inspect-bridge"},
+        "model_args": {
+          "allOf": [{"type": "object"}, {"$ref": "#/$defs/publicJson"}]
+        },
+        "model_args_env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          }
+        },
+        "generate_config": {
+          "allOf": [{"type": "object"}, {"$ref": "#/$defs/publicJson"}]
+        },
+        "thinking_level": {"type": "string", "minLength": 1}
+      }
+    },
+    "directExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "provider", "model", "auth_file_env"],
+      "properties": {
+        "mode": {"const": "pi-direct"},
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\s*?\\[]+$",
+          "not": {"const": "inspect-bridge"}
+        },
+        "model": {"type": "string", "minLength": 1, "pattern": "^[^\\s*?\\[]+$"},
+        "auth_file_env": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "thinking_level": {"type": "string", "minLength": 1}
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context_tokens", "max_output_tokens", "reasoning", "input"],
+      "properties": {
+        "context_tokens": {"type": "integer", "minimum": 1},
+        "max_output_tokens": {"type": "integer", "minimum": 1},
+        "reasoning": {"type": "boolean"},
+        "input": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["text", "image"]}
+        }
+      }
+    },
+    "publicJson": {
+      "anyOf": [
+        {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "pattern": "([aA][pP][iI][_-]?[kK][eE][yY]|[pP][aA][sS][sS][wW][oO][rR][dD]|[sS][eE][cC][rR][eE][tT]|[cC][rR][eE][dD][eE][nN][tT][iI][aA][lL]|[tT][oO][kK][eE][nN]$)"
+            }
+          },
+          "additionalProperties": {"$ref": "#/$defs/publicJson"}
+        },
+        {"type": "array", "items": {"$ref": "#/$defs/publicJson"}},
+        {"type": ["string", "number", "boolean", "null"]}
+      ]
+    }
+  }
+}

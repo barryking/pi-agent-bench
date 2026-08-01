@@ -5,12 +5,16 @@ from types import SimpleNamespace
 
 import pytest
 
+from pi_agent_bench.agent_profiles import AgentProfile
+from pi_agent_bench.dataset import load_cases
 from pi_agent_bench.inspect_tasks import (
     _validate_git_starting_repository,
     load_case_suite,
     outcome_suite,
     outcome_tasks,
 )
+from pi_agent_bench.model_profiles import ModelProfile
+from pi_agent_bench.pi_profiles import vanilla_pi_profile
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,8 +25,39 @@ def _sample_cases():
     ]
 
 
+def _agent_args():
+    resource = ModelProfile.from_dict(
+        "test-model",
+        {
+            "kind": "local",
+            "model": "openai/test",
+            "execution": {
+                "mode": "inspect-bridge",
+                "model_args": {},
+                "model_args_env": {},
+                "generate_config": {},
+            },
+            "capabilities": {
+                "context_tokens": 32768,
+                "max_output_tokens": 8192,
+                "reasoning": False,
+                "input": ["text"],
+            },
+            "configuration": {"revision": "test"},
+        },
+    )
+    profile = AgentProfile(
+        name="test-agent",
+        description="Test agent.",
+        pi_profile=vanilla_pi_profile(),
+        model_resources=(resource,),
+        default_model_resource="test-model",
+    )
+    return {"agent_profile": profile, "bridged_models": {"test-model": object()}}
+
+
 def test_suite_loads_complete_outcomes_with_docker_sandbox():
-    suite = outcome_suite()
+    suite = outcome_suite(**_agent_args())
 
     assert suite.sandbox.type == "docker"
     assert len(suite.dataset) == 2
@@ -35,7 +70,7 @@ def test_suite_loads_complete_outcomes_with_docker_sandbox():
 
 
 def test_owned_starter_suite_has_five_complete_outcomes():
-    tasks = outcome_tasks("evals/starter/cases.jsonl")
+    tasks = outcome_tasks("evals/starter/cases.jsonl", **_agent_args())
 
     assert sum(len(task.dataset) for task in tasks) == 5
     assert all(sample.metadata["owned"] is True for task in tasks for sample in task.dataset)
@@ -44,6 +79,27 @@ def test_owned_starter_suite_has_five_complete_outcomes():
         for task in tasks
         for sample in task.dataset
     )
+
+
+@pytest.mark.parametrize(
+    ("name", "case_id"),
+    (
+        ("user-list-filter", "user-list-filter"),
+        ("user-idempotency", "user-idempotency"),
+    ),
+)
+def test_external_candidates_are_tracked_as_non_runnable_drafts(name, case_id):
+    [case] = load_cases(ROOT / "evals" / "candidates" / name / "cases.jsonl")
+
+    assert case.id == case_id
+    assert case.metadata["draft"] is True
+    assert case.metadata["dataset_version"].endswith("-draft-1")
+    assert case.metadata["starting_repository"].startswith("local-repos/")
+    assert case.expected.verifier_command == (
+        "python3",
+        f"/opt/verifiers/{case_id}/verify.py",
+    )
+    assert (ROOT / "verifiers" / case.id / "verify.py").is_file()
 
 
 def test_suite_rejects_mixed_dataset_versions(tmp_path):
@@ -65,9 +121,9 @@ def test_task_builder_splits_mixed_execution_limits(tmp_path):
     path.write_text("\n".join(json.dumps(case) for case in cases))
 
     with pytest.raises(ValueError, match="different execution limits"):
-        outcome_suite(str(path))
+        outcome_suite(str(path), **_agent_args())
 
-    tasks = outcome_tasks(str(path))
+    tasks = outcome_tasks(str(path), **_agent_args())
 
     assert len(tasks) == 2
     assert {(task.time_limit, task.turn_limit, task.token_limit) for task in tasks} == {
@@ -85,7 +141,7 @@ def test_draft_case_validates_but_cannot_run(tmp_path):
     _, cases, _ = load_case_suite(path)
     assert cases[0].metadata["draft"] is True
     with pytest.raises(ValueError, match="refusing to run draft"):
-        outcome_tasks(str(path))
+        outcome_tasks(str(path), **_agent_args())
 
 
 def test_suite_rejects_missing_starting_repository(tmp_path):

@@ -10,7 +10,7 @@ from typing import Any
 from inspect_ai import Task, task
 from inspect_ai.dataset import Sample
 
-from pi_agent_bench.agent_profiles import AgentProfile, vanilla_agent_profile
+from pi_agent_bench.agent_profiles import AgentProfile
 from pi_agent_bench.case_assets import resolve_starting_repository
 from pi_agent_bench.dataset import OutcomeCase, load_cases
 from pi_agent_bench.inspect_agent import configure_pi_case, pi_agent
@@ -25,11 +25,9 @@ DEFAULT_DATASET = REPOSITORY_ROOT / "evals" / "sample" / "cases.jsonl"
 @task
 def outcome_suite(
     dataset: str = str(DEFAULT_DATASET),
-    direct_provider: str | None = None,
-    direct_model: str | None = None,
-    direct_auth_file: str | None = None,
-    thinking_level: str | None = None,
     agent_profile: AgentProfile | None = None,
+    bridged_models: dict[str, Any] | None = None,
+    direct_auth_files: dict[str, str] | None = None,
     agent_runtime_env: dict[str, str] | None = None,
 ) -> Task:
     source, cases, version = load_case_suite(dataset)
@@ -40,22 +38,18 @@ def outcome_suite(
         cases,
         version,
         limits,
-        direct_provider=direct_provider,
-        direct_model=direct_model,
-        direct_auth_file=direct_auth_file,
-        thinking_level=thinking_level,
         agent_profile=agent_profile,
+        bridged_models=bridged_models,
+        direct_auth_files=direct_auth_files,
         agent_runtime_env=agent_runtime_env,
     )
 
 
 def outcome_tasks(
     dataset: str = str(DEFAULT_DATASET),
-    direct_provider: str | None = None,
-    direct_model: str | None = None,
-    direct_auth_file: str | None = None,
-    thinking_level: str | None = None,
     agent_profile: AgentProfile | None = None,
+    bridged_models: dict[str, Any] | None = None,
+    direct_auth_files: dict[str, str] | None = None,
     agent_runtime_env: dict[str, str] | None = None,
 ) -> list[Task]:
     """Build exact-limit tasks, splitting a mixed-limit outcome dataset."""
@@ -67,11 +61,9 @@ def outcome_tasks(
             group,
             version,
             limits,
-            direct_provider=direct_provider,
-            direct_model=direct_model,
-            direct_auth_file=direct_auth_file,
-            thinking_level=thinking_level,
             agent_profile=agent_profile,
+            bridged_models=bridged_models,
+            direct_auth_files=direct_auth_files,
             agent_runtime_env=agent_runtime_env,
             name=_task_group_name(limits),
         )
@@ -85,15 +77,14 @@ def _outcome_task(
     version: str,
     limits: tuple[int, int, int],
     *,
-    direct_provider: str | None = None,
-    direct_model: str | None = None,
-    direct_auth_file: str | None = None,
-    thinking_level: str | None = None,
     agent_profile: AgentProfile | None = None,
+    bridged_models: dict[str, Any] | None = None,
+    direct_auth_files: dict[str, str] | None = None,
     agent_runtime_env: dict[str, str] | None = None,
     name: str | None = None,
 ) -> Task:
-    selected_agent = agent_profile or vanilla_agent_profile()
+    if agent_profile is None:
+        raise ValueError("outcome tasks require a composed agent profile")
     seconds, turns, total_tokens = limits
     score_components = sorted(
         {component for case in cases for component in _declared_score_components(case)}
@@ -103,11 +94,9 @@ def _outcome_task(
         solver=[
             configure_pi_case(),
             pi_agent(
-                direct_provider=direct_provider,
-                direct_model=direct_model,
-                direct_auth_file=direct_auth_file,
-                thinking_level=thinking_level,
-                agent_profile=selected_agent,
+                agent_profile=agent_profile,
+                bridged_models=bridged_models,
+                direct_auth_files=direct_auth_files,
                 agent_runtime_env=agent_runtime_env,
             ),
         ],
@@ -122,7 +111,7 @@ def _outcome_task(
         metadata={
             "dataset_path": str(source),
             "case_limits": _limits_metadata(limits),
-            "agent_profile": selected_agent.public_identity(),
+            "agent_profile": agent_profile.public_identity(),
         },
     )
 
@@ -165,8 +154,12 @@ def _outcome_sample(case: OutcomeCase, source: Path) -> Sample:
 def _outcome_assets(case: OutcomeCase, source: Path) -> tuple[Path, Path]:
     starting_repository = _starting_repository(case, source)
     expected_verifier = f"/opt/verifiers/{case.id}/verify.py"
-    if expected_verifier not in case.expected.verifier_command:
-        raise ValueError(f"{case.id}: verifier_command must reference {expected_verifier}")
+    exact_command = ("python3", expected_verifier)
+    if case.expected.verifier_command != exact_command:
+        raise ValueError(
+            f"{case.id}: verifier_command must be exactly "
+            f'["python3", "{expected_verifier}"]'
+        )
     verifier = REPOSITORY_ROOT / "verifiers" / case.id / "verify.py"
     if not verifier.is_file():
         raise ValueError(f"{case.id}: verifier source does not exist: {verifier}")

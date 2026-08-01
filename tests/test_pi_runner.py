@@ -1,14 +1,51 @@
 import json
 import sys
 
+from pi_agent_bench.model_profiles import ModelProfile
 from pi_agent_bench.pi_guard import run as run_guard
 from pi_agent_bench.pi_runner import (
     PiRunConfig,
-    build_bridge_models_config,
     build_command,
+    build_models_config,
+    model_patterns,
     parse_json_events,
+    summarise_direct_usage,
     summarise_events,
+    unconfigured_models,
 )
+
+
+def resource(name, *, direct=False):
+    execution = (
+        {
+            "mode": "pi-direct",
+            "provider": "openai-codex",
+            "model": name,
+            "auth_file_env": "PI_AUTH_FILE",
+        }
+        if direct
+        else {
+            "mode": "inspect-bridge",
+            "model_args": {},
+            "model_args_env": {},
+            "generate_config": {},
+        }
+    )
+    return ModelProfile.from_dict(
+        name,
+        {
+            "kind": "hosted" if direct else "local",
+            "model": f"openai/{name}",
+            "execution": execution,
+            "capabilities": {
+                "context_tokens": 65536,
+                "max_output_tokens": 32768,
+                "reasoning": True,
+                "input": ["text"],
+            },
+            "configuration": {"revision": name},
+        },
+    )
 
 
 def test_builds_ephemeral_json_command():
@@ -17,7 +54,6 @@ def test_builds_ephemeral_json_command():
             provider="dgx-spark",
             model="qwen-coder",
             timeout_seconds=60,
-            trust_mode="no-approve",
         ),
         "Inspect the repository.",
     )
@@ -32,7 +68,6 @@ def test_builds_ephemeral_json_command():
         "--no-extensions",
         "--no-prompt-templates",
         "--no-themes",
-        "--no-context-files",
         "--tools",
         "read,bash,edit,write,grep,find,ls",
         "--provider",
@@ -43,13 +78,20 @@ def test_builds_ephemeral_json_command():
     )
 
 
-def test_builds_minimal_inspect_bridge_provider():
-    config = build_bridge_models_config(port=13131, context_tokens=32768)
+def test_builds_multi_resource_pi_catalog_with_case_caps():
+    resources = (resource("local"), resource("reviewer"), resource("subscription", direct=True))
+    config = build_models_config(resources, port=13131, context_tokens=32768)
 
     provider = config["providers"]["inspect-bridge"]
     assert provider["baseUrl"] == "http://localhost:13131/v1"
-    assert provider["models"][0]["id"] == "inspect"
+    assert [model["id"] for model in provider["models"]] == ["local", "reviewer"]
     assert provider["models"][0]["contextWindow"] == 32768
+    assert config["providers"]["openai-codex"]["models"][0]["id"] == "subscription"
+    assert model_patterns(resources) == (
+        "inspect-bridge/local",
+        "inspect-bridge/reviewer",
+        "openai-codex/subscription",
+    )
 
 
 def test_builds_direct_command_with_explicit_thinking_level():
@@ -81,7 +123,6 @@ def test_enables_only_the_selected_agent_resources():
             provider="inspect-bridge",
             model="inspect",
             timeout_seconds=60,
-            trust_mode="approve",
             tools=("read", "custom_tool"),
             context_files_enabled=True,
             skills_enabled=True,
@@ -91,7 +132,8 @@ def test_enables_only_the_selected_agent_resources():
         "Implement the task.",
     )
 
-    assert "--approve" in command
+    assert "--no-approve" in command
+    assert "--approve" not in command
     assert "--no-context-files" not in command
     assert "--no-skills" not in command
     assert "--no-extensions" not in command
@@ -126,6 +168,96 @@ def test_parses_and_summarises_pi_events():
     assert summary.input_tokens == 14
     assert summary.cached_input_tokens == 4
     assert summary.output_tokens == 3
+
+
+def test_direct_usage_excludes_bridge_events_and_keeps_cost_coverage_evidence():
+    events = (
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "provider": "inspect-bridge",
+                "model": "local",
+                "responseId": "bridge",
+                "usage": {"input": 100, "output": 10},
+            },
+        },
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "provider": "openai-codex",
+                "model": "review",
+                "responseId": "direct",
+                "durationMs": 500,
+                "usage": {
+                    "input": 20,
+                    "cacheRead": 5,
+                    "output": 7,
+                    "reasoning": 3,
+                    "cost": {"total": 0.04},
+                },
+            },
+        },
+    )
+    usage = summarise_direct_usage(events, {("openai-codex", "review")})
+
+    assert usage.aggregate == {
+        "call_count": 1,
+        "input_tokens": 25,
+        "cached_input_tokens": 5,
+        "output_tokens": 7,
+        "reasoning_tokens": 3,
+        "model_seconds": 0.5,
+        "reported_cost": 0.04,
+    }
+    assert usage.cost_reported_calls == 1
+
+
+def test_direct_usage_keeps_distinct_events_without_deduplication_keys():
+    events = tuple(
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "provider": "openai-codex",
+                "model": "review",
+                "usage": {"input": 10, "output": 2},
+            },
+        }
+        for _ in range(2)
+    )
+
+    usage = summarise_direct_usage(events, {("openai-codex", "review")})
+
+    assert usage.aggregate["call_count"] == 2
+    assert usage.aggregate["input_tokens"] == 20
+    assert usage.aggregate["output_tokens"] == 4
+
+
+def test_rejects_observed_models_outside_the_composed_profile():
+    events = (
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "provider": "inspect-bridge",
+                "model": "local",
+            },
+        },
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "provider": "inspect-bridge",
+                "model": "unconfigured-reviewer",
+            },
+        },
+    )
+
+    assert unconfigured_models(events, (resource("local"),)) == (
+        "inspect-bridge/unconfigured-reviewer",
+    )
 
 
 def test_guard_deduplicates_streamed_assistant_completion_events():

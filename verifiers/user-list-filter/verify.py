@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Protected checks for the user-list filter pilot."""
+"""Protected checks for the external user-list filter candidate."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def hidden_probe(temporary: Path) -> dict[str, bool]:
                 return {
                     "id": str(uuid.uuid4()),
                     "first_name": prefix + "-" + name,
-                    "last_name": "Pilot",
+                    "last_name": "Candidate",
                     "address": "Test Street",
                     "activated": active,
                 }

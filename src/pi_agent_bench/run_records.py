@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import json
-import math
 import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from .agent_profiles import AgentProfile, vanilla_agent_profile
+from .agent_profiles import AgentProfile
 from .harness_identity import validate_harness_identity
-from .model_profiles import ModelProfile
-from .verification import finite_number, primary_score, quality_value
+from .schema_versions import (
+    RUN_RECORD_SCHEMA_VERSION,
+    SUPPORTED_RUN_RECORD_SCHEMA_VERSIONS,
+)
+from .usage_records import inspect_timing, json_value, usage_record
+from .verification import primary_score, quality_value
 
 
 def export_inspect_logs(
@@ -22,9 +25,15 @@ def export_inspect_logs(
     """Rebuild disposable dashboard records from canonical Inspect logs."""
     from inspect_ai.log import list_eval_logs, read_eval_log
 
+    destination = Path(results_dir).expanduser().resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    previous_records = _managed_valid_records(destination)
+    previous_by_log = _records_by_inspect_log(previous_records)
+    preserved_records: set[Path] = set()
     written: list[Path] = []
     for info in list_eval_logs(str(Path(logs_dir).expanduser().resolve())):
         log = read_eval_log(info.name)
+        source_records = previous_by_log.get(str(log.location), set())
         metadata = getattr(log.eval, "metadata", None) or {}
         benchmark = metadata.get("pi_agent_bench")
         if not isinstance(benchmark, dict):
@@ -32,9 +41,11 @@ def export_inspect_logs(
                 f"skipped Inspect log without Pi Agent Bench metadata: {info.name}",
                 stacklevel=2,
             )
+            preserved_records.update(source_records)
             continue
-        profile = benchmark.get("profile")
         agent_profile = benchmark.get("agent_profile")
+        cohort_identity = benchmark.get("cohort")
+        benchmark_id = benchmark.get("benchmark_id") or log.eval.run_id
         run_name = benchmark.get("run_name")
         cache_state = benchmark.get("cache_state")
         harness_identity = benchmark.get("harness")
@@ -43,58 +54,74 @@ def export_inspect_logs(
                 f"skipped Inspect log without a run name: {info.name}",
                 stacklevel=2,
             )
+            preserved_records.update(source_records)
             continue
         if cache_state not in {"unspecified", "cold", "warm"}:
             warnings.warn(
                 f"skipped Inspect log with an invalid cache state: {info.name}",
                 stacklevel=2,
             )
+            preserved_records.update(source_records)
             continue
         try:
             written.extend(
                 write_run_records(
                     [log],
-                    results_dir,
-                    profile,
-                    agent_profile=agent_profile,
+                    destination,
+                    agent_profile,
+                    benchmark_id=benchmark_id,
                     run_name=run_name,
                     cache_state=cache_state,
                     harness_identity=harness_identity,
+                    cohort_identity=cohort_identity,
                 )
             )
         except ValueError as exc:
             warnings.warn(f"skipped {info.name}: {exc}", stacklevel=2)
+            preserved_records.update(source_records)
+    current_records = {path.resolve() for path in written}
+    for stale in sorted(previous_records - current_records - preserved_records):
+        _remove_record_and_artifacts(stale)
     return written
 
 
 def write_run_records(
     logs: Iterable[Any],
     results_dir: str | Path,
-    profile: ModelProfile | dict[str, Any],
+    agent_profile: AgentProfile | dict[str, Any],
     *,
-    agent_profile: AgentProfile | dict[str, Any] | None = None,
     run_name: str,
     cache_state: str = "unspecified",
     harness_identity: dict[str, Any],
+    cohort_identity: dict[str, Any],
+    benchmark_id: str | None = None,
 ) -> list[Path]:
     destination = Path(results_dir)
     destination.mkdir(parents=True, exist_ok=True)
     harness = validate_harness_identity(harness_identity)
-    profile_identity = _profile_identity(profile)
     agent_identity = _agent_profile_identity(agent_profile)
+    cohort = _cohort_identity(cohort_identity)
+    record_schema_version = (
+        RUN_RECORD_SCHEMA_VERSION
+        if cohort.get("cohort_schema_version") == 2
+        else 5
+    )
     written: list[Path] = []
     for log in logs:
+        effective_benchmark_id = benchmark_id or str(log.eval.run_id)
         log_status = str(getattr(log, "status", "success"))
         if log_status != "success":
             invalid_path = _write_invalid_record(
                 destination,
                 log,
-                profile,
-                agent_profile=agent_identity,
+                agent_identity,
                 reason=f"Inspect log status is {log_status}",
+                benchmark_id=effective_benchmark_id,
+                record_schema_version=record_schema_version,
                 run_name=run_name,
                 cache_state=cache_state,
                 harness_identity=harness,
+                cohort_identity=cohort,
             )
             warnings.warn(
                 f"excluded incomplete Inspect log from rankings: {invalid_path}",
@@ -106,13 +133,15 @@ def write_run_records(
                 invalid_path = _write_invalid_record(
                     destination,
                     log,
-                    profile,
-                    agent_profile=agent_identity,
+                    agent_identity,
                     sample=sample,
                     reason="Inspect sample has an execution error",
+                    benchmark_id=effective_benchmark_id,
+                    record_schema_version=record_schema_version,
                     run_name=run_name,
                     cache_state=cache_state,
                     harness_identity=harness,
+                    cohort_identity=cohort,
                 )
                 warnings.warn(
                     f"excluded errored Inspect sample from rankings: {invalid_path}",
@@ -125,13 +154,15 @@ def write_run_records(
                 invalid_path = _write_invalid_record(
                     destination,
                     log,
-                    profile,
-                    agent_profile=agent_identity,
+                    agent_identity,
                     sample=sample,
                     reason="Inspect sample has no score",
+                    benchmark_id=effective_benchmark_id,
+                    record_schema_version=record_schema_version,
                     run_name=run_name,
                     cache_state=cache_state,
                     harness_identity=harness,
+                    cohort_identity=cohort,
                 )
                 warnings.warn(
                     f"excluded unscored Inspect sample from rankings: {invalid_path}",
@@ -152,13 +183,15 @@ def write_run_records(
                 invalid_path = _write_invalid_record(
                     destination,
                     log,
-                    profile,
-                    agent_profile=agent_identity,
+                    agent_identity,
                     sample=sample,
                     reason="Inspect primary score has no finite quality value",
+                    benchmark_id=effective_benchmark_id,
+                    record_schema_version=record_schema_version,
                     run_name=run_name,
                     cache_state=cache_state,
                     harness_identity=harness,
+                    cohort_identity=cohort,
                 )
                 warnings.warn(
                     f"excluded invalid Inspect score from rankings: {invalid_path}",
@@ -170,19 +203,20 @@ def write_run_records(
                 selected_score.value,
                 score_metadata.get("components"),
             )
-            timing = _inspect_timing(sample)
+            timing = inspect_timing(sample)
             record = {
-                "schema_version": 4,
+                "schema_version": record_schema_version,
                 "run_id": log.eval.run_id,
+                "benchmark_id": effective_benchmark_id,
                 "case_id": str(sample.id),
                 "dataset_version": log.eval.task_version,
                 "trial_number": sample.epoch,
                 "synthetic": bool((sample.metadata or {}).get("synthetic", False)),
                 "run_name": run_name,
                 "cache_state": cache_state,
-                "model_configuration": profile_identity,
-                "agent_configuration": agent_identity,
+                "agent_profile": agent_identity,
                 "inspect_model": str(log.eval.model),
+                "cohort": cohort,
                 "harness": {
                     "pi_version_actual": score_metadata.get("pi_version"),
                     **harness,
@@ -202,8 +236,8 @@ def write_run_records(
                 ),
                 "score": {
                     "name": score_name,
-                    "value": _json_value(score_value),
-                    "fields": _json_value(selected_score.value),
+                    "value": json_value(score_value),
+                    "fields": json_value(selected_score.value),
                     "explanation": selected_score.explanation,
                     "components": score_components,
                     "method": score_metadata.get("scoring_method"),
@@ -215,7 +249,7 @@ def write_run_records(
                 },
                 "inspect_scores": {
                     name: {
-                        "value": _json_value(score.value),
+                        "value": json_value(score.value),
                         "explanation": score.explanation,
                     }
                     for name, score in scores.items()
@@ -225,14 +259,19 @@ def write_run_records(
                     "stdout": score_metadata.get("verifier_stdout"),
                     "stderr": score_metadata.get("verifier_stderr"),
                 },
-                "usage": _json_value(sample.model_usage or {}),
+                "usage": usage_record(
+                    sample,
+                    score_metadata,
+                    agent_identity,
+                    timing,
+                ),
                 "agent": {
                     **score_metadata.get("pi", {}),
                     "wall_seconds": score_metadata.get("pi_wall_seconds"),
                     "return_code": score_metadata.get("pi_return_code"),
                 },
                 "turn_count": sample.turn_count,
-                "errors": _json_value(sample.error),
+                "errors": json_value(sample.error),
                 "artifacts": artifacts,
             }
             record_path = destination / f"{artifact_stem}.json"
@@ -247,13 +286,15 @@ def write_run_records(
 def _write_invalid_record(
     destination: Path,
     log: Any,
-    profile: ModelProfile | dict[str, Any],
+    agent_profile: AgentProfile | dict[str, Any],
     *,
-    agent_profile: AgentProfile | dict[str, Any] | None = None,
     reason: str,
+    benchmark_id: str,
+    record_schema_version: int,
     run_name: str,
     cache_state: str,
     harness_identity: dict[str, Any],
+    cohort_identity: dict[str, Any],
     sample: Any | None = None,
 ) -> Path:
     invalid_dir = destination / "_invalid"
@@ -264,22 +305,23 @@ def _write_invalid_record(
     path.write_text(
         json.dumps(
             {
-                "schema_version": 4,
+                "schema_version": record_schema_version,
                 "run_id": log.eval.run_id,
+                "benchmark_id": benchmark_id,
                 "case_id": sample_id if sample is not None else None,
                 "trial_number": epoch if sample is not None else None,
                 "run_name": run_name,
                 "cache_state": cache_state,
-                "model_configuration": _profile_identity(profile),
-                "agent_configuration": _agent_profile_identity(agent_profile),
+                "agent_profile": _agent_profile_identity(agent_profile),
                 "inspect_model": str(log.eval.model),
                 "harness": harness_identity,
+                "cohort": cohort_identity,
                 "validity": {
                     "valid": False,
                     "reason": reason,
                     "inspect_log_status": str(getattr(log, "status", "unknown")),
-                    "log_error": _json_value(getattr(log, "error", None)),
-                    "sample_error": _json_value(
+                    "log_error": json_value(getattr(log, "error", None)),
+                    "sample_error": json_value(
                         getattr(sample, "error", None) if sample is not None else None
                     ),
                 },
@@ -309,79 +351,88 @@ def _score_components(value: Any, metadata_components: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         for name, component in value.items():
             if name.startswith("component."):
-                component_value = _json_value(component)
+                component_value = json_value(component)
                 if component_value is not None:
                     components[name.removeprefix("component.")] = component_value
     return components
 
 
-def _inspect_timing(sample: Any) -> dict[str, float | int | None]:
-    """Build small timing facts from Inspect events, which remain the source."""
-    model_seconds = 0.0
-    tool_seconds = 0.0
-    model_output_tokens = 0
-    model_calls = 0
-    tool_calls = 0
-    for event in getattr(sample, "events", None) or []:
-        event_type = getattr(event, "event", None)
-        seconds = getattr(event, "working_time", None)
-        if event_type == "model" and getattr(event, "role", None) in {None, ""}:
-            model_calls += 1
-            if finite_number(seconds) is not None:
-                model_seconds += float(seconds)
-            output = getattr(event, "output", None)
-            usage = getattr(output, "usage", None)
-            tokens = getattr(usage, "output_tokens", None)
-            if isinstance(tokens, int) and not isinstance(tokens, bool):
-                model_output_tokens += tokens
-        elif event_type == "tool":
-            tool_calls += 1
-            if finite_number(seconds) is not None:
-                tool_seconds += float(seconds)
-    working_seconds = getattr(sample, "working_time", None)
-    return {
-        "inspect_working_seconds": (
-            float(working_seconds) if finite_number(working_seconds) is not None else None
-        ),
-        "model_working_seconds": model_seconds if model_calls else None,
-        "tool_working_seconds": tool_seconds if tool_calls else None,
-        "model_calls": model_calls,
-        "tool_calls": tool_calls,
-        "model_output_tokens": model_output_tokens if model_calls else None,
-        "observed_output_tokens_per_model_second": (
-            model_output_tokens / model_seconds
-            if model_output_tokens and model_seconds > 0
-            else None
-        ),
-    }
-
-
-def _profile_identity(profile: ModelProfile | dict[str, Any]) -> dict[str, Any]:
-    if isinstance(profile, ModelProfile):
-        return profile.public_identity()
-    required = {
-        "profile",
-        "kind",
-        "model",
-        "configuration",
-        "configuration_fingerprint",
-    }
-    if not isinstance(profile, dict) or not required.issubset(profile):
-        raise ValueError("Inspect log has no complete benchmark profile identity")
-    return dict(profile)
 
 
 def _agent_profile_identity(
-    profile: AgentProfile | dict[str, Any] | None,
+    profile: AgentProfile | dict[str, Any],
 ) -> dict[str, Any]:
-    if profile is None:
-        return vanilla_agent_profile().public_identity()
     if isinstance(profile, AgentProfile):
         return profile.public_identity()
-    required = {"profile", "configuration", "configuration_fingerprint"}
+    required = {
+        "profile",
+        "pi_profile",
+        "model_resources",
+        "default_model_resource",
+        "configuration_fingerprint",
+    }
     if not isinstance(profile, dict) or not required.issubset(profile):
         raise ValueError("Inspect log has no complete agent profile identity")
     return dict(profile)
+
+
+def _cohort_identity(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or not isinstance(
+        value.get("cohort_fingerprint"), str
+    ):
+        raise ValueError("Inspect log has no complete comparison cohort identity")
+    return dict(value)
+
+
+def _managed_valid_records(destination: Path) -> set[Path]:
+    """Find only Pi Agent Bench run records that a log rebuild owns."""
+    records: set[Path] = set()
+    for path in destination.glob("*.json"):
+        if path.name == "summary.json":
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if (
+            isinstance(value, dict)
+            and value.get("schema_version") in SUPPORTED_RUN_RECORD_SCHEMA_VERSIONS
+            and isinstance(value.get("run_id"), str)
+            and isinstance(value.get("case_id"), str)
+            and value.get("validity", {}).get("valid") is not False
+        ):
+            records.add(path.resolve())
+    return records
+
+
+def _records_by_inspect_log(records: set[Path]) -> dict[str, set[Path]]:
+    """Index managed records by the canonical log that produced them."""
+    indexed: dict[str, set[Path]] = {}
+    for path in records:
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        artifacts = value.get("artifacts") if isinstance(value, dict) else None
+        location = artifacts.get("inspect_log") if isinstance(artifacts, dict) else None
+        if isinstance(location, str) and location:
+            indexed.setdefault(location, set()).add(path)
+    return indexed
+
+
+def _remove_record_and_artifacts(record_path: Path) -> None:
+    """Prune one stale derived record and only artifacts explicitly owned by it."""
+    try:
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        record = {}
+    artifacts = record.get("artifacts", {}) if isinstance(record, dict) else {}
+    final_diff = artifacts.get("final_diff") if isinstance(artifacts, dict) else None
+    if isinstance(final_diff, str) and final_diff:
+        diff_path = Path(final_diff)
+        if diff_path.parent.resolve() == record_path.parent.resolve():
+            diff_path.unlink(missing_ok=True)
+    record_path.unlink(missing_ok=True)
 
 
 def _is_success(value: Any, threshold: Any = 1.0) -> bool:
@@ -395,17 +446,3 @@ def _is_success(value: Any, threshold: Any = 1.0) -> bool:
     ):
         return value >= threshold
     return False
-
-
-def _json_value(value: Any) -> Any:
-    if hasattr(value, "model_dump"):
-        return value.model_dump(mode="json")
-    if isinstance(value, dict):
-        return {str(key): _json_value(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_value(item) for item in value]
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    return str(value)
